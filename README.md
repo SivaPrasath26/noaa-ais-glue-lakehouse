@@ -1,6 +1,6 @@
 # **NOAA AIS Data Pipeline**
 
-PySpark and AWS Glue pipeline processing ~455 GB of vessel tracking data from the **National Oceanic and Atmospheric Administration (NOAA)** via the **Automatic Identification System (AIS)**. Handles continuous AIS feeds from U.S. waters to produce analytics-ready datasets in Amazon S3 for large-scale maritime intelligence and backend API integration.
+PySpark and AWS Glue pipeline processing **~455 GB** of vessel tracking data from the **National Oceanic and Atmospheric Administration (NOAA)** via the **Automatic Identification System (AIS)**. Handles continuous AIS feeds from U.S. waters to produce analytics-ready datasets in Amazon S3 for large-scale maritime intelligence and backend API integration.
 
 ---
 
@@ -16,21 +16,20 @@ The system is designed for scalability, modularity, testability, and cost-effici
 
 **Data Flow:**
 
-NOAA AIS Data (Raw CSVs)
-│
-▼
-S3 (Raw Layer)
-│
-▼
-AWS Glue / PySpark
-├── Raw → Staging (schema, cleaning)
-└── Staging → Curated (enrichment, transformations)
-│
-▼
-S3 (Curated Layer)
-│
-▼
-FastAPI / Dashboard Integration
+```mermaid
+graph TD
+    A[NOAA AIS Data - Raw CSVs] --> B[S3 Raw Layer]
+    B --> C[AWS Glue Crawler]
+    C --> D[Glue Data Catalog]
+    D --> E[PySpark Transformation - Raw to Staging]
+    E --> F[Staging Layer - Cleaned and Schema Aligned]
+    F --> G[PySpark Transformation - Staging to Curated]
+    G --> H[Curated Layer - Enriched and Analytics Ready]
+    H --> I[Parquet or RDS tables]
+    I --> J[FastAPI or Dashboard Integration - Power BI]
+
+
+```
 
 ---
 
@@ -47,39 +46,34 @@ FastAPI / Dashboard Integration
 
 ## **Repository Structure**
 
-noaa-ais-pipeline/
-│
-├── pipelines/
-│   ├── raw_to_staging.py
-│   └── staging_to_curated.py
-│
-├── transformations/
-│   ├── facts/
-│   ├── dims/
-│   └── notebooks/
-│
-├── views/
-│   └── view_definitions.sql
-│
-├── ddl_scripts/
-│   └── table_ddl_scripts.sql
-│
-├── utils/
-│   ├── schema_definitions.py
-│   ├── lookups.py
-│   ├── config.py
-│   └── common_functions.py
-│
-├── mappings/
-│   └── column_mapping.yml
-│
-├── data/                     # sample and mock datasets for local testing
-│
-├── tests/                    # unit tests for PySpark jobs and schema validation
-│
-├── raw/                      # manual ingestion or setup notes
-├── notebooks/                # exploration or validation
-└── README.md
+- [noaa-ais-pipeline/](./)  
+  - [pipelines/](./pipelines) → Pipeline scripts  
+    - [raw_to_staging.py](./pipelines/raw_to_staging.py) → Ingests raw NOAA AIS CSVs into the staging layer  
+    - [staging_to_curated.py](./pipelines/staging_to_curated.py) → Cleans, enriches, and prepares curated datasets  
+  - [transformations/](./transformations) → Transformation modules  
+    - [facts/](./transformations/facts) → Fact table build scripts  
+    - [dims/](./transformations/dims) → Dimension table build scripts  
+    - [notebooks/](./transformations/notebooks) → Transformation notebooks for debugging and exploration  
+  - [views/](./views)  
+    - [view_definitions.sql](./views/view_definitions.sql) → Reusable analytical and Power BI view definitions  
+  - [ddl_scripts/](./ddl_scripts)  
+    - [table_ddl_scripts.sql](./ddl_scripts/table_ddl_scripts.sql) → DDL scripts for curated and analytics tables  
+  - [utils/](./utils) → Utility scripts  
+    - [schema_definitions.py](./utils/schema_definitions.py) → Centralized table schema definitions  
+    - [lookups.py](./utils/lookups.py) → Lookup dictionaries (vessel type, cargo, etc.)  
+    - [config.py](./utils/config.py) → Configuration management and environment setup  
+    - [common_functions.py](./utils/common_functions.py) → Common helper utilities for transformations  
+  - [mappings/](./mappings)  
+    - [column_mapping.yml](./mappings/column_mapping.yml) → Column-level mapping across pipeline stages  
+  - [data/](./data) → Sample and mock datasets for local testing  
+  - [tests/](./tests) → Unit and schema validation tests  
+    - [test_schemas.py](./tests/test_schemas.py) → Schema validation tests  
+    - [test_transformations.py](./tests/test_transformations.py) → Transformation logic tests  
+  - [raw/](./raw) → Notes or manual ingestion data used during setup  
+  - [notebooks/](./notebooks) → Exploration and validation notebooks
+  - [requirements.txt](./requirements.txt) → Python dependencies for the pipeline 
+  - [README.md](./README.md) → Project documentation  
+
 
 ---
 
@@ -96,8 +90,10 @@ noaa-ais-pipeline/
 ## **Data Source**
 
 AIS vessel position data provided by NOAA’s Office for Coastal Management
-→ [https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2024](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2024)
-→ [https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
+
+→ [2024 Files (zip file size - 116.7 GB, csv file size -319.5 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2024)
+
+→ [2025 Files (zip file size - 28.6 GB, csv file size -136.1 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
 
 ---
 
