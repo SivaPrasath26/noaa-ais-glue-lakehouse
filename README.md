@@ -95,6 +95,16 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 
 → [2025 Files (zip file size - 28.6 GB, csv file size -136.1 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
 
+## Lookup Tables  
+
+| Lookup Type | Description | Dataset Link |
+|--------------|--------------|----------------|
+| **Maritime Identification Digits (MID)** | Unique 3-digit codes assigned to each country to identify vessels’ origin during radio communication. | [ITU MID Table](https://www.itu.int/en/ITU-R/terrestrial/fmd/Pages/mid.aspx) |
+| **International Call Sign Series** | Allocated call sign prefixes used to identify a vessel's registered country or licensing authority. | [ITU Call Sign Series](https://www.itu.int/en/ITU-R/terrestrial/fmd/Pages/call_sign_series.aspx) |
+| **Vessel Type Codes** | Classification of vessel types used in AIS data for analytics and categorization. | [NOAA Vessel Type Codes (PDF)](https://coast.noaa.gov/data/marinecadastre/ais/VesselTypeCodes2018.pdf) |
+| **AIS Navigational Status Codes** | Describes the real-time navigational state of a vessel (e.g., underway, at anchor, aground). | [Datalastic AIS Status Codes](https://datalastic.com/blog/ais-navigational-status/) |
+
+
 ---
 
 ## **Future Work**
