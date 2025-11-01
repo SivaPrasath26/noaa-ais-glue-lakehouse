@@ -35,7 +35,7 @@ graph TD
 
 ## **Key Features**
 
-* Processes > 450 GB of AIS vessel data efficiently using distributed PySpark jobs.
+* Processes > 450 GB(2024 and 2025) of AIS vessel data efficiently using distributed PySpark jobs.
 * Modular three-stage pipeline: **Raw → Staging → Curated**.
 * Integrates lookup mappings for vessel type, cargo, and transceiver classification.
 * Produces analytics-ready Parquet datasets for querying and visualization.
