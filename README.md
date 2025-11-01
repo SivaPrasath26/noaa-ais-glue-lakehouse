@@ -1,0 +1,2 @@
+# noaa-ais-pipeline
+PySpark and AWS Glue pipeline for processing ~455 GB of vessel tracking data from the National Oceanic and Atmospheric Administration (NOAA), collected through the Automatic Identification System (AIS) for 2024–2025. Processes continuous AIS signals from U.S. ships to build scalable ingestion and transformation workflows that generate analytics-ready datasets in S3 for maritime intelligence and API-based applications.
