@@ -93,7 +93,7 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 
 → [2024 Files (zip file size - 116.7 GB, csv file size -319.5 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2024)
 
-→ [2025 Files (zip file size - 28.6 GB, csv file size -136.1 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
+→ [2025 Files (zip file size - 38.6 GB, csv file size -136.1 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
 
 ## Lookup Tables  
 
