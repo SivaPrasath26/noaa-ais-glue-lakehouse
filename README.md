@@ -6,7 +6,7 @@ PySpark and AWS Glue pipeline processing **~455 GB** of vessel tracking data fro
 
 ## **Overview**
 
-This project implements a complete **data engineering workflow** to process high-volume maritime data. The pipeline ingests daily AIS files from NOAA’s public repository, performs schema standardization, geospatial transformations, and builds curated and analytical datasets optimized for downstream analytics and visualization.
+This project implements a complete **data engineering workflow** to process **high-volume geospatial AIS (Automatic Identification System) maritime data**. The pipeline ingests daily AIS files from NOAA’s public repository, performs schema standardization, geospatial transformations, and builds curated and analytical datasets optimized for downstream analytics and visualization.
 
 The system is designed for scalability, modularity, testability, and cost-efficiency using AWS native services.
 
