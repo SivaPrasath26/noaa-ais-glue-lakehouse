@@ -1,0 +1,22 @@
+# Core PySpark environment
+pyspark==3.5.1
+findspark
+
+# AWS SDKs for S3 interaction
+boto3
+botocore
+
+# Data manipulation and validation
+pandas
+pyarrow
+numpy
+jsonschema
+
+# Configuration and logging
+python-dotenv
+pyyaml
+loguru
+
+# Testing and utilities
+pytest
+pytest-mock
