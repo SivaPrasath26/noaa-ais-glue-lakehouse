@@ -13,7 +13,7 @@ file_paths = {
 }
 
 # Output directory for EDA maps
-OUTPUT_DIR = os.path.join('data', 'assets', 'eda_raw')
+OUTPUT_DIR = os.path.join('data', 'assets', 'eda')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def generate_map(df, label, lat_col='LAT', lon_col='LON', mmsi_col='MMSI'):
