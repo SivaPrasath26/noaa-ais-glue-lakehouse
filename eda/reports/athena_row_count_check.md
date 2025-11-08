@@ -75,6 +75,8 @@ TBLPROPERTIES ('skip.header.line.count'='1');
 
 Run `MSCK REPAIR TABLE` to auto-discover partition folders.
 
+![Registering Partitions](../assets/images/athena/registering_partitions.png)
+
 ```sql
 MSCK REPAIR TABLE noaa_ais_all;
 ```
@@ -100,7 +102,7 @@ ORDER BY year;
 -- 2024 | 3119805347
 -- 2025 | 1438950302
 ```
-
+![Athena Row Count Output](../assets/images/athena/row_count.png)
 ---
 
 ### Step 5. Cost Analysis
