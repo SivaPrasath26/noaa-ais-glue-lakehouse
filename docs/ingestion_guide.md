@@ -103,6 +103,15 @@ Each folder contains a single uncompressed `.csv` for that day’s AIS data.
 
 ---
 
+## **S3 Partition Hierarchy**
+
+The images below show how daily AIS files are stored and partitioned by `year`, `month`, and `day` in Amazon S3.
+
+| Year | Month | Day |
+|------|--------|-----|
+| ![Year Partition](../assets/images/s3_partitions/year.png) | ![Month Partition](../assets/images/s3_partitions/month.png) | ![Day Partition](../assets/images/s3_partitions/day.png) |
+
+
 ## **Cost & Network Notes**
 
 | Item                               | Cost                 | Notes                                          |
