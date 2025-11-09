@@ -79,13 +79,19 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         df_raw = (
             spark.read
             .option("header", True)
-            .schema(SCHEMA_MAP["raw"])
+            .option("inferSchema", False)
             .csv(input_path)
         )
+
 
         # Step 1.1: Normalize column names to handle schema drift
         # Ensures source field names like “latitude” → “LAT”, etc.
         df_raw = normalize_columns(df_raw)
+
+        for field in SCHEMA_MAP["raw"].fields:
+            if field.name in df_raw.columns:
+                df_raw = df_raw.withColumn(field.name, F.col(field.name).cast(field.dataType))
+
 
         # raw_count = df_raw.count()
         # logger.info(f"Raw record count: {raw_count}")
