@@ -1,12 +1,42 @@
-# raw_to_processed.py
 """
-ETL job for transforming NOAA AIS raw CSV data to processed analytics-ready Parquet.
-Step 1: Read raw data, apply schema, and perform all cleaning transformations.
-Lookup enrichment will be implemented in the next step.
+ETL job for transforming NOAA AIS raw CSV data to cleaned, partitioned Parquet format.
+Now supports both full (historical) and daily (incremental) data loads.
+Designed for AWS Glue environment (Glue 4.0).
 """
 
-from pyspark.sql import SparkSession
+import os
+import sys
+from datetime import datetime
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from awsglue.utils import getResolvedOptions
 from pyspark.sql import functions as F
+
+# ============================================================== #
+# Spark + Hadoop configuration
+# ============================================================== #
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
+
+# Configure Hadoop for S3A access in Glue 4.0
+spark._jsc.hadoopConfiguration().set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+spark._jsc.hadoopConfiguration().set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+spark._jsc.hadoopConfiguration().set("fs.defaultFS", "s3a:///")
+spark._jsc.hadoopConfiguration().set("fs.s3a.aws.credentials.provider",
+    "com.amazonaws.auth.InstanceProfileCredentialsProvider,com.amazonaws.auth.DefaultAWSCredentialsProviderChain")
+spark._jsc.hadoopConfiguration().set("mapreduce.fileoutputcommitter.algorithm.version", "2")
+spark._jsc.hadoopConfiguration().set("spark.sql.parquet.output.committer.class",
+    "org.apache.spark.internal.io.cloud.PathOutputCommitProtocol")
+
+# ============================================================== #
+# Imports from utils modules                                     #
+# ============================================================== #
+from utils.config import CFG, setup_logger
 from utils.schema_definitions import SCHEMA_MAP
 from utils.common_functions import (
     parse_base_datetime,
@@ -18,73 +48,159 @@ from utils.common_functions import (
     drop_duplicates,
 )
 
-# ==============================================================
-# Spark Session Initialization
-# ==============================================================
+# Initialize Glue job and logger
+args = getResolvedOptions(
+    sys.argv,
+    ["JOB_NAME", "mode", "start_date", "end_date"]
+)
 
-def get_spark_session(app_name: str = "NOAA_AIS_Raw_To_Stagin") -> SparkSession:
+job = Job(glueContext)
+job.init(args["JOB_NAME"], args)
+logger = setup_logger(__name__)
+logger.info("Glue job initialized successfully")
+logger.info(f"Spark version: {spark.version}")
+
+
+# ============================================================== #
+# ETL Transformation Pipeline                                    #
+# ============================================================== #
+
+def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantine_path: str) -> None:
     """
-    Create and configure Spark session for ETL job.
+    Perform cleaning and transformation on raw AIS data and write processed Parquet.
+    Includes schema enforcement, coordinate validation, null handling, and partitioning.
     """
-    spark = (
-        SparkSession.builder
-        .appName(app_name)
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.shuffle.partitions", "200")
-        .getOrCreate()
-    )
-    return spark
+    try:
+        # ------------------------------------------------------ #
+        # Step 1: Read raw input CSV data from S3 using schema   #
+        # ------------------------------------------------------ #
+        logger.info(f"Reading raw data from {input_path}")
+        df_raw = (
+            spark.read
+            .option("header", True)
+            .schema(SCHEMA_MAP["raw"])
+            .csv(input_path)
+        )
+
+        # raw_count = df_raw.count()
+        # logger.info(f"Raw record count: {raw_count}")
+
+        # ------------------------------------------------------ #
+        # Step 2: Data Cleaning                                 #
+        # Replace blanks, validate coordinates, and deduplicate #
+        # ------------------------------------------------------ #
+        logger.info("Starting data cleaning process")
+        df = replace_empty_with_null(df_raw)
+        df = clean_coordinates(df, quarantine_path=quarantine_path)
+        df = clean_sog_cog_heading(df)
+        df = drop_duplicates(df)
+
+        # clean_count = df.count()
+        # logger.info(f"Cleaned record count: {clean_count}")
+        # logger.info(f"Records removed during cleaning: {raw_count - clean_count}")
+
+        # ------------------------------------------------------ #
+        # Step 3: Derive time-based partition columns           #
+        # Extract year, month, and day from BaseDateTime column #
+        # ------------------------------------------------------ #
+        logger.info("Deriving time partitions")
+        df = parse_base_datetime(df)
+
+        # ------------------------------------------------------ #
+        # Step 4: Add movement flag                             #
+        # Flag indicates whether vessel is in motion (SOG > 0)  #
+        # ------------------------------------------------------ #
+        logger.info("Adding movement flag")
+        df = derive_movement_flag(df)
+
+        # ------------------------------------------------------ #
+        # Step 5: Compute and print summary stats                #
+        # Used for validation and record quality checks          #
+        # ------------------------------------------------------ #
+        # logger.info("Computing summary statistics")
+        # summary_df = compute_summary_stats(df)
+        # summary = summary_df.collect()[0].asDict()
+        # logger.info(f"Summary statistics: {summary}")
+
+        # ------------------------------------------------------ #
+        # Step 6: Write cleaned Parquet output to staging S3     #
+        # Partitioned by year, month, day for efficient querying #
+        # ------------------------------------------------------ #
+        
+        output_path = (output_path.rstrip("/") + "/cleaned/")
+        
+        df.write.mode("overwrite").partitionBy("year", "month", "day").format("parquet").save(output_path)
+
+        logger.info("Raw to staging transformation completed successfully.")
+
+    except Exception as e:
+        logger.error(f"ETL transformation failed: {e}", exc_info=True)
+        raise
 
 
-# ==============================================================
-# ETL Transformation Pipeline
-# ==============================================================
+# ============================================================== #
+# Job Entry Point                                                #
+# ============================================================== #
 
-def transform_raw_to_processed(spark: SparkSession, input_path: str, output_path: str) -> None:
-    """
-    Perform cleaning and transformation on raw AIS data and write processed output.
-    """
-    # Read raw NOAA AIS CSV files with predefined schema
-    df_raw = (
-        spark.read
-        .option("header", True)
-        .schema(SCHEMA_MAP["raw"])
-        .csv(input_path)
-    )
+try:
+    logger.info("Starting NOAA AIS ETL Glue job execution")
 
-    # Data cleaning
-    df = replace_empty_with_null(df_raw)
-    df = clean_coordinates(df)
-    df = clean_sog_cog_heading(df)
-    df = drop_duplicates(df)
+    # ---------------------------------------------------------- #
+    # Step 1: Extract runtime parameters                        #
+    # ---------------------------------------------------------- #
 
-    # Datetime parsing and partition derivation
-    df = parse_base_datetime(df)
+    mode = args["mode"]
+    start_date_str = args["start_date"]
+    end_date_str = args["end_date"]
+    
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
 
-    # Derive movement flag
-    df = derive_movement_flag(df)
+    base_path = CFG.RAW_DATA_PATH
+    output_s3_path = CFG.STAGING_DATA_PATH
+    if not output_s3_path:
+        raise ValueError("Output S3 path is empty. Check Glue job parameters or config defaults.")
+    quarantine_s3_path = CFG.QUARANTINE_PATH
 
-    # Summary statistics for validation
-    summary_df = compute_summary_stats(df)
-    summary = summary_df.collect()[0].asDict()
-    print("Summary statistics:", summary)
+    # ---------------------------------------------------------- #
+    # Step 2: Determine input path(s) based on run mode          #
+    # ---------------------------------------------------------- #
+    from datetime import timedelta
 
-    # Write processed Parquet partitioned by year/month/day
-    (
-        df.write
-        .mode("overwrite")
-        .partitionBy("year", "month", "day")
-        .parquet(output_path)
-    )
+    if mode == "full":
+        logger.info("Running full backfill for all available data.")
+        input_paths = [f"{base_path}year=*/month=*/day=*/"]
+    else:
+        input_paths = []
+        delta_days = (end_date - start_date).days + 1
+        for i in range(delta_days):
+            d = start_date + timedelta(days=i)
+            y, m, dd = d.strftime("%Y"), d.strftime("%m"), d.strftime("%d")
+            input_paths.append(f"{base_path}year={y}/month={m}/day={dd}/")
+
+        logger.info(f"Running batch load from {start_date.date()} to {end_date.date()} ({delta_days} days)")
+
+    # ---------------------------------------------------------- #
+    # Step 3: Execute ETL pipeline                               #
+    # ---------------------------------------------------------- #
+    for p in input_paths:
+        date_str = p.split("year=")[1].replace("/", "-").replace("month=", "").replace("day=", "")
+        logger.info(f"Processing date path: {p} (derived date: {date_str})")
+        transform_raw_to_staging(spark, p, output_s3_path, quarantine_s3_path)
+
+except Exception as e:
+    logger.error(f"Pipeline terminated due to fatal error: {e}", exc_info=True)
+    raise
 
 
-# ==============================================================
-# Job Entry Point
-# ==============================================================
-
-if __name__ == "__main__":
-    spark = get_spark_session()
-    input_s3_path = "s3://noaa-ais-raw-data/2024/"
-    output_s3_path = "s3://noaa-ais-staging/ais_positions/"
-    transform_raw_to_processed(spark, input_s3_path, output_s3_path)
-    spark.stop()
+finally:
+    # ---------------------------------------------------------- #
+    # Step 4: Commit and finalize Glue job                       #
+    # ---------------------------------------------------------- #
+    logger.info("Finalizing and committing Glue job")
+    try:
+        job.commit()
+        logger.info("Glue job committed successfully.")
+    except Exception as e:
+        logger.warning(f"Glue job commit failed: {e}")
+    
