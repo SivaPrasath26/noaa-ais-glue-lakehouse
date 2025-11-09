@@ -7,6 +7,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import TimestampType, DoubleType
 from utils.config import setup_logger
+from utils.column_mapping import COLUMN_MAPPING
 
 # Initialize logger
 logger = setup_logger(__name__)
@@ -20,24 +21,32 @@ def parse_base_datetime(df: DataFrame, input_col: str = "BaseDateTime") -> DataF
     Parse BaseDateTime safely in place and derive year/month/day for partitioning.
     Invalid or unparsable timestamps are dropped to avoid Spark path errors.
     """
+def parse_base_datetime(df: DataFrame, input_col: str = "BaseDateTime") -> DataFrame:
+    """
+    Parse BaseDateTime safely in place and derive year/month/day for partitioning.
+    Handles both 'yyyy-MM-dd HH:mm:ss' and ISO 'yyyy-MM-ddTHH:mm:ss[.SSS][Z]'.
+    Invalid timestamps are dropped.
+    """
     try:
-        # Convert BaseDateTime to proper timestamp (in place)
+        # Handle both common timestamp styles (space or 'T')
         df = df.withColumn(
             input_col,
-            F.to_timestamp(
-                F.regexp_replace(F.col(input_col), "Z$", ""),  # strip trailing Z if any
-                "yyyy-MM-dd'T'HH:mm:ss[.SSS]"                 # support milliseconds too
+            F.coalesce(
+                F.to_timestamp(
+                    F.regexp_replace(F.col(input_col), "Z$", ""),
+                    "yyyy-MM-dd'T'HH:mm:ss[.SSS]"
+                ),
+                F.to_timestamp(F.col(input_col), "yyyy-MM-dd HH:mm:ss")
             )
         )
 
-        # Drop rows with invalid or null timestamps (prevents empty partition dirs)
+        # Drop rows with invalid or null timestamps
         df = df.filter(F.col(input_col).isNotNull())
 
         # Derive partition columns
         df = df.withColumn("year", F.date_format(F.col(input_col), "yyyy"))
         df = df.withColumn("month", F.date_format(F.col(input_col), "MM"))
         df = df.withColumn("day", F.date_format(F.col(input_col), "dd"))
-
 
         return df
 
@@ -124,6 +133,23 @@ def replace_empty_with_null(df: DataFrame) -> DataFrame:
         logger.error(f"Error replacing empty strings with nulls: {e}", exc_info=True)
         raise
 
+# ============================================================== #
+# Column Normalization                                          #
+# ============================================================== #
+
+def normalize_columns(df: DataFrame) -> DataFrame:
+    """
+    Rename source columns based on COLUMN_MAPPING.
+    Columns already matching schema names are skipped.
+    """
+    try:
+        for src, target in COLUMN_MAPPING.items():
+            if src in df.columns:
+                df = df.withColumnRenamed(src, target)
+        return df
+    except Exception as e:
+        logger.error(f"Error normalizing column names: {e}", exc_info=True)
+        raise
 
 # ============================================================== #
 # Enrichment Functions                                           #
