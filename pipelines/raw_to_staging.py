@@ -40,6 +40,7 @@ from utils.config import CFG, setup_logger
 from utils.schema_definitions import SCHEMA_MAP
 from utils.common_functions import (
     parse_base_datetime,
+    normalize_columns,
     clean_coordinates,
     clean_sog_cog_heading,
     replace_empty_with_null,
@@ -82,6 +83,10 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
             .csv(input_path)
         )
 
+        # Step 1.1: Normalize column names to handle schema drift
+        # Ensures source field names like “latitude” → “LAT”, etc.
+        df_raw = normalize_columns(df_raw)
+
         # raw_count = df_raw.count()
         # logger.info(f"Raw record count: {raw_count}")
 
@@ -90,9 +95,21 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         # Replace blanks, validate coordinates, and deduplicate #
         # ------------------------------------------------------ #
         logger.info("Starting data cleaning process")
+
+        # Step 2.1: Replace empty strings with null values
         df = replace_empty_with_null(df_raw)
+
+        # Step 2.2: Derive partition fields (year/month/day) early
+        # Ensures undated records are correctly quarantined later
+        df = parse_base_datetime(df)
+
+        # Step 2.3: Filter invalid coordinates and quarantine bad data
         df = clean_coordinates(df, quarantine_path=quarantine_path)
+
+        # Step 2.4: Clamp SOG, COG, and Heading within valid maritime bounds
         df = clean_sog_cog_heading(df)
+
+        # Step 2.5: Drop duplicate AIS records
         df = drop_duplicates(df)
 
         # clean_count = df.count()
@@ -100,21 +117,14 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         # logger.info(f"Records removed during cleaning: {raw_count - clean_count}")
 
         # ------------------------------------------------------ #
-        # Step 3: Derive time-based partition columns           #
-        # Extract year, month, and day from BaseDateTime column #
-        # ------------------------------------------------------ #
-        logger.info("Deriving time partitions")
-        df = parse_base_datetime(df)
-
-        # ------------------------------------------------------ #
-        # Step 4: Add movement flag                             #
+        # Step 3: Add movement flag                             #
         # Flag indicates whether vessel is in motion (SOG > 0)  #
         # ------------------------------------------------------ #
         logger.info("Adding movement flag")
         df = derive_movement_flag(df)
 
         # ------------------------------------------------------ #
-        # Step 5: Compute and print summary stats                #
+        # Step 4: Compute and print summary stats                #
         # Used for validation and record quality checks          #
         # ------------------------------------------------------ #
         # logger.info("Computing summary statistics")
@@ -123,15 +133,29 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         # logger.info(f"Summary statistics: {summary}")
 
         # ------------------------------------------------------ #
-        # Step 6: Write cleaned Parquet output to staging S3     #
-        # Partitioned by year, month, day for efficient querying #
+        # Step 5: Write cleaned Parquet output to staging S3     #
+        # Single-partition explicit write (production safe)      #
         # ------------------------------------------------------ #
-        
         output_path = (output_path.rstrip("/") + "/cleaned/")
-        
-        df.write.mode("overwrite").partitionBy("year", "month", "day").format("parquet").save(output_path)
+
+        # Extract single partition values from the DataFrame
+        y = df.select("year").first()[0]
+        m = df.select("month").first()[0]
+        d = df.select("day").first()[0]
+
+        partition_path = f"{output_path}year={y}/month={m}/day={d}/"
+        logger.info(f"Writing partition: {partition_path}")
+
+        (
+            df.write
+            .mode("overwrite")
+            .format("parquet")
+            .save(partition_path)
+        )
+
 
         logger.info("Raw to staging transformation completed successfully.")
+
 
     except Exception as e:
         logger.error(f"ETL transformation failed: {e}", exc_info=True)
