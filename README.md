@@ -81,6 +81,7 @@ graph TD
 
 * **PySpark / AWS Glue** – distributed data transformation
 * **Amazon S3** – data lake storage (raw, staging, curated)
+* **Amazon Athena** – external table creation and query validation on raw partitions
 * **AWS CloudShell** – ingestion automation from NOAA source
 * **Python 3.10+** – core scripting and orchestration
 * **pytest / PySpark testing framework** – validation and unit testing
