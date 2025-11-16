@@ -1,4 +1,4 @@
-from utils.common_functions import normalize_columns, COLUMN_MAPPING
+from utils.common_functions_raw import normalize_columns, COLUMN_MAPPING
 
 # Test normalizing column names based on COLUMN_MAPPING
 def test_normalize_columns(spark):

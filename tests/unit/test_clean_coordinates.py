@@ -1,4 +1,4 @@
-from utils.common_functions import clean_coordinates
+from utils.common_functions_raw import clean_coordinates
 
 # Test cleaning coordinates with valid and invalid values
 def test_clean_coordinates_valid_only(spark):

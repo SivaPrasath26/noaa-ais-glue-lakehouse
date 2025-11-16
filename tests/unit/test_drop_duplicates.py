@@ -1,4 +1,4 @@
-from utils.common_functions import drop_duplicates
+from utils.common_functions_raw import drop_duplicates
 
 # Test dropping duplicate rows based on MMSI and BaseDateTime
 def test_drop_duplicates(spark):

@@ -1,4 +1,4 @@
-from utils.common_functions import clean_sog_cog_heading
+from utils.common_functions_raw import clean_sog_cog_heading
 
 # Test cleaning SOG, COG, and Heading with out-of-bounds values
 def test_clean_sog_cog_heading(spark):

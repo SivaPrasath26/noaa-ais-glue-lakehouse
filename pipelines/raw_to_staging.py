@@ -38,13 +38,14 @@ spark._jsc.hadoopConfiguration().set("spark.sql.parquet.output.committer.class",
 # ============================================================== #
 from utils.config import CFG, setup_logger
 from utils.schema_definitions import SCHEMA_MAP
-from utils.common_functions import (
+from utils.common_functions_raw import (
     parse_base_datetime,
     normalize_columns,
     clean_coordinates,
     clean_sog_cog_heading,
     replace_empty_with_null,
     derive_movement_flag,
+    compute_summary_stats,
     drop_duplicates,
 )
 
