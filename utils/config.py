@@ -36,6 +36,18 @@ DEFAULT_GLUE_ROLE_NAME = _env("GLUE_ROLE_NAME", "AWSGlueServiceRole-Project")
 DEFAULT_S3_RAW = _env("S3_RAW_PATH", "s3://noaa-ais-raw-data/")
 DEFAULT_S3_STAGING = _env("S3_STAGING_PATH", "s3://noaa-ais-staging-data/")
 DEFAULT_S3_LOOKUP = _env("S3_LOOKUP_PATH", "s3://noaa-ais-lookup-data/")
+DEFAULT_S3_CURATED = _env("S3_CURATED_PATH", "s3://noaa-ais-curated-data/")
+
+# Lookup filenames (no paths, only filenames)
+LOOKUP_MID_FILE = "maritime_identification_digits.xlsx"
+LOOKUP_CALLSIGN_FILE = "international_call_signs.xlsx"
+LOOKUP_NAV_STATUS_FILE = "navigational_status_codes.xlsx"
+LOOKUP_VESSEL_TYPE_FILE = "vessel_type_codes.xlsx"
+
+# Output folders for dims
+DIM_COUNTRY_DIR = "dim_country/"
+DIM_NAV_STATUS_DIR = "dim_nav_status/"
+DIM_VESSEL_TYPE_DIR = "dim_vessel_type/"
 
 # --------------------------------------------------------
 # Normalize all S3 defaults to s3a:// (Glue 4.0 compatible)
@@ -74,6 +86,9 @@ class AISConfig:
     def S3_LOOKUP(self) -> str:
         return _env("S3_LOOKUP_PATH", DEFAULT_S3_LOOKUP).rstrip("/") + "/"
 
+    @property
+    def S3_CURATED(self) -> str:
+        return _env("S3_CURATED_PATH", DEFAULT_S3_CURATED).rstrip("/") + "/"
 
     @property
     def QUARANTINE_PATH(self) -> str:
