@@ -4,8 +4,9 @@ All functions are designed for import and use in AWS Glue or PySpark ETL scripts
 """
 
 from pyspark.sql import DataFrame
-from pyspark.sql import functions as F
-from pyspark.sql.types import TimestampType, DoubleType
+from pyspark.sql import functions as F, Window
+from pyspark.sql.types import TimestampType, DoubleType, StringType, IntegerType
+import math
 from utils.config import setup_logger
 from utils.column_mapping import COLUMN_MAPPING
 

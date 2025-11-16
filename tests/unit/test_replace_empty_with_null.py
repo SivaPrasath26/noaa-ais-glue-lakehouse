@@ -1,4 +1,4 @@
-from utils.common_functions import replace_empty_with_null
+from utils.common_functions_raw import replace_empty_with_null
 from pyspark.sql import functions as F
 
 # Test replacing empty strings with nulls

@@ -1,4 +1,4 @@
-from utils.common_functions import derive_movement_flag
+from utils.common_functions_raw import derive_movement_flag
 
 # Test deriving MovementFlag based on SOG
 def test_derive_movement_flag(spark):
