@@ -19,27 +19,21 @@ logger = setup_logger(__name__)
 def parse_base_datetime(df: DataFrame, input_col: str = "BaseDateTime") -> DataFrame:
     """
     Parse BaseDateTime safely in place and derive year/month/day for partitioning.
-    Invalid or unparsable timestamps are dropped to avoid Spark path errors.
-    """
-def parse_base_datetime(df: DataFrame, input_col: str = "BaseDateTime") -> DataFrame:
-    """
-    Parse BaseDateTime safely in place and derive year/month/day for partitioning.
     Handles both 'yyyy-MM-dd HH:mm:ss' and ISO 'yyyy-MM-ddTHH:mm:ss[.SSS][Z]'.
     Invalid timestamps are dropped.
     """
     try:
-        # Handle both common timestamp styles (space or 'T')
+        #  DateTime parsing with multiple formats
+        cleaned = F.regexp_replace(F.col(input_col), r"Z$", "")
+        cleaned = F.regexp_extract(cleaned, r"^(.+?)([+-]\d{2}:\d{2})?$", 1)
         df = df.withColumn(
             input_col,
             F.coalesce(
-                F.to_timestamp(
-                    F.regexp_replace(F.col(input_col), "Z$", ""),
-                    "yyyy-MM-dd'T'HH:mm:ss[.SSS]"
-                ),
+                F.to_timestamp(cleaned, "yyyy-MM-dd'T'HH:mm:ss.SSS"),
+                F.to_timestamp(cleaned, "yyyy-MM-dd'T'HH:mm:ss"),
                 F.to_timestamp(F.col(input_col), "yyyy-MM-dd HH:mm:ss")
             )
         )
-
         # Drop rows with invalid or null timestamps
         df = df.filter(F.col(input_col).isNotNull())
 
@@ -71,33 +65,32 @@ def clean_coordinates(
     Writes invalid records to S3 if a quarantine path is provided.
     """
     try:
-        valid = df.filter(
-            (F.col(lat_col).between(-90, 90)) &
-            (F.col(lon_col).between(-180, 180))
-        )
-
-        invalid = df.exceptAll(valid)
+        condition = (F.col(lat_col).between(-90, 90)) & (F.col(lon_col).between(-180, 180))
+        valid = df.filter(condition)
+        invalid = df.filter(~condition)
 
         if quarantine_path:
-            try:
-                invalid_count = invalid.count()
-                if quarantine_path and invalid_count > 0:
-                    try:
-                        if "year" in df.columns and "month" in df.columns and "day" in df.columns:
-                            quarantine_output = f"{quarantine_path.rstrip('/')}/year={df.select('year').first()[0]}/month={df.select('month').first()[0]}/day={df.select('day').first()[0]}/"
-                        else:
-                            quarantine_output = f"{quarantine_path.rstrip('/')}/undated/"
+            threshold = 100000
+            invalid_count = invalid.limit(threshold + 1).count()
 
-                        invalid.coalesce(1).write.mode("overwrite").option("header", True).csv(quarantine_output)
-                        logger.info(f"Invalid coordinate records written to {quarantine_output} ({invalid_count} rows)")
-
-                    except Exception as e:
-                        logger.warning(f"Could not write quarantine data to {quarantine_path}: {e}")
+            if invalid_count > 0:
+                # extract y/m/d for path
+                if {"year", "month", "day"}.issubset(df.columns):
+                    vals = df.select("year", "month", "day").first()
+                    y, m, d = vals["year"], vals["month"], vals["day"]
+                    quarantine_output = f"{quarantine_path.rstrip('/')}/year={y}/month={m}/day={d}/"
                 else:
-                    logger.info(f"No invalid coordinate records to quarantine.")
+                    quarantine_output = f"{quarantine_path.rstrip('/')}/undated/"
 
-            except Exception as e:
-                logger.warning(f"Could not write quarantine data to {quarantine_path}: {e}")
+                # threshold logic
+                if invalid_count <= threshold:
+                    invalid.coalesce(1).write.mode("overwrite").option("header", True).csv(quarantine_output)
+                else:
+                    invalid.write.mode("overwrite").option("header", True).csv(quarantine_output)
+
+                logger.info(f"Invalid coordinate records written to {quarantine_output} ({invalid_count} rows)")
+            else:
+                logger.info("No invalid coordinate records to quarantine.")
 
         return valid
 
@@ -201,15 +194,29 @@ def compute_summary_stats(df: DataFrame) -> DataFrame:
         raise
 
 
-def drop_duplicates(df: DataFrame, subset_cols: list = ["MMSI", "BaseDateTime"]) -> DataFrame:
+def drop_duplicates(df: DataFrame) -> DataFrame:
     """
-    Remove duplicate AIS records based on MMSI and timestamp combination.
+    Robust deduplication using a content-based hash key.
+    Ensures duplicate rows are removed even across multiple files or reruns.
     """
     try:
-        return df.dropDuplicates(subset=subset_cols)
+        # Create a stable hash from all business columns
+        from pyspark.sql.functions import sha2, concat_ws, struct, to_json
+        
+        deduped = df.withColumn(
+            "dedupe_key",
+            sha2(to_json(struct(*df.columns)), 256)
+        ).dropDuplicates(["dedupe_key"])
+        
+        # Remove dedupe_key from final output
+        deduped = deduped.drop("dedupe_key")
+        
+        return deduped
+
     except Exception as e:
-        logger.error(f"Error dropping duplicates: {e}", exc_info=True)
+        logger.error(f"Error during deduplication: {e}", exc_info=True)
         raise
+
 
 
 # ============================================================== #

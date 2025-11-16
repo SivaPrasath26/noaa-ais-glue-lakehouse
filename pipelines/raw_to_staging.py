@@ -1,6 +1,6 @@
 """
 ETL job for transforming NOAA AIS raw CSV data to cleaned, partitioned Parquet format.
-Now supports both full (historical) and daily (incremental) data loads.
+Supports both full (historical) and daily (incremental) data loads.
 Designed for AWS Glue environment (Glue 4.0).
 """
 
@@ -45,7 +45,6 @@ from utils.common_functions import (
     clean_sog_cog_heading,
     replace_empty_with_null,
     derive_movement_flag,
-    compute_summary_stats,
     drop_duplicates,
 )
 
@@ -88,6 +87,19 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         # Ensures source field names like “latitude” → “LAT”, etc.
         df_raw = normalize_columns(df_raw)
 
+        incoming_cols = set(df_raw.columns)
+        expected_cols = set([f.name for f in SCHEMA_MAP["raw"].fields])
+
+        # Add missing columns
+        for col in expected_cols - incoming_cols:
+            df_raw = df_raw.withColumn(col, F.lit(None))
+
+        # Drop unexpected columns (but log them)
+        for col in incoming_cols - expected_cols:
+            logger.info(f"Unexpected column seen: {col}")
+            df_raw = df_raw.drop(col)
+            logger.info(f"Dropped unexpected column: {col}")
+
         for field in SCHEMA_MAP["raw"].fields:
             if field.name in df_raw.columns:
                 df_raw = df_raw.withColumn(field.name, F.col(field.name).cast(field.dataType))
@@ -110,7 +122,7 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
         df = parse_base_datetime(df)
 
         # Step 2.3: Filter invalid coordinates and quarantine bad data
-        df = clean_coordinates(df, quarantine_path=quarantine_path)
+        df = clean_coordinates(df, lat_col="LAT", lon_col="LON",quarantine_path=quarantine_path)
 
         # Step 2.4: Clamp SOG, COG, and Heading within valid maritime bounds
         df = clean_sog_cog_heading(df)
@@ -140,25 +152,29 @@ def transform_raw_to_staging(spark, input_path: str, output_path: str, quarantin
 
         # ------------------------------------------------------ #
         # Step 5: Write cleaned Parquet output to staging S3     #
-        # Single-partition explicit write (production safe)      #
+        # Single-partition explicit write                        #
         # ------------------------------------------------------ #
         output_path = (output_path.rstrip("/") + "/cleaned/")
 
-        # Extract single partition values from the DataFrame
-        y = df.select("year").first()[0]
-        m = df.select("month").first()[0]
-        d = df.select("day").first()[0]
+        partitions = (
+            df.select("year", "month", "day")
+            .distinct()
+            .orderBy("year", "month", "day")
+            .collect()
+        )
 
-        partition_path = f"{output_path}year={y}/month={m}/day={d}/"
-        logger.info(f"Writing partition: {partition_path}")
+        for p in partitions:
+            logger.info(
+                f"Partition to be written: year={p['year']}/month={p['month']}/day={p['day']}"
+            )
 
         (
             df.write
             .mode("overwrite")
             .format("parquet")
-            .save(partition_path)
+            .partitionBy("year", "month", "day")
+            .save(output_path)
         )
-
 
         logger.info("Raw to staging transformation completed successfully.")
 
