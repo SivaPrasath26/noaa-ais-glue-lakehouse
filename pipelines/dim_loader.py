@@ -39,9 +39,9 @@ from utils.config import CFG, setup_logger
 logger = setup_logger(__name__)
 
 # Import dimension functions
-from dim.dim_country import build_dim_country
-from dim.dim_nav_status import build_dim_nav_status
-from dim.dim_vessel_type import build_dim_vessel_type
+from transformations.dims.dim_country import build_dim_country
+from transformations.dims.dim_nav_status import build_dim_nav_status
+from transformations.dims.dim_vessel_type import build_dim_vessel_type
 
 
 # ===========================================

@@ -94,6 +94,20 @@ class AISConfig:
     def QUARANTINE_PATH(self) -> str:
         return self.S3_STAGING + "quarantine/"
 
+    # State snapshot locations
+    @property
+    def STATE_BASE_PATH(self) -> str:
+        return self.S3_CURATED + "state/"
+
+    @property
+    def STATE_LATEST_PATH(self) -> str:
+        return self.STATE_BASE_PATH + "latest/"
+
+    @property
+    def STATE_BY_DATE_PATH(self) -> str:
+        """Prefix for dated state snapshots. Append formatted date (YYYY-MM-DD)."""
+        return self.STATE_BASE_PATH + "by_date="
+
     # ------------------------------------------------------------------
     # Runtime parameters and backward-compatible aliases
     # ------------------------------------------------------------------

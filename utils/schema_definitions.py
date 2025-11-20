@@ -10,6 +10,7 @@ from pyspark.sql.types import (
     IntegerType,
     DoubleType,
     TimestampType,
+    LongType,
 )
 
 # ----------------------------------------------------------
@@ -65,9 +66,22 @@ AIS_STAGING_SCHEMA = StructType([
 
 
 # ----------------------------------------------------------
-# SCHEMA MAP — stage-based schema enforcement
+# SCHEMA MAP - stage-based schema enforcement
 # ----------------------------------------------------------
 SCHEMA_MAP = {
     "raw": AIS_RAW_SCHEMA,
-    "staging": AIS_STAGING_SCHEMA
+    "staging": AIS_STAGING_SCHEMA,
 }
+
+# ----------------------------------------------------------
+# STATE SNAPSHOT SCHEMA - compact per-MMSI continuity (curated state)
+# ----------------------------------------------------------
+STATE_SNAPSHOT_SCHEMA = StructType([
+    StructField("MMSI", StringType(), False),
+    StructField("BaseDateTime", TimestampType(), True),
+    StructField("LAT", DoubleType(), True),
+    StructField("LON", DoubleType(), True),
+    StructField("VoyageID", LongType(), True),
+])
+
+SCHEMA_MAP["state_snapshot"] = STATE_SNAPSHOT_SCHEMA
