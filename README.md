@@ -15,21 +15,30 @@ End-to-end data engineering workflow for high-volume geospatial AIS. The pipelin
 ```mermaid
 graph TD
     A["NOAA AIS Raw CSVs"] --> B["S3 Raw Layer"]
-    B --> C["AWS Glue Crawler"]
-    C --> D["Glue Data Catalog"]
-    D --> E["Raw to Staging
- PySpark Glue"]
-    E --> F["S3 Staging Parquet
- y/m/d"]
-    F --> G["State Snapshots
- latest and by_date"]
-    F --> H["Staging to Curated
-  Trajectory Fact"]
-    H --> I["Voyage State Update"]
-    H --> J["trajectory_points (curated)"]
-    J --> K["voyage_summary (curated)"]
-    K --> L["Athena / Quicksight / FastAPI"]
+
+    B --> C["Raw to Staging
+    PySpark Glue"]
+
+    C --> D["S3 Staging Parquet
+    y/m/d"]
+
+    D --> E["State Snapshots
+    latest and by_date"]
+    D --> F["Staging to Curated
+    Trajectory Fact"]
+
+    F --> G["Voyage State Update"]
+    F --> H["trajectory_points (curated)"]
+
+    H --> I["voyage_summary (curated)"]
+
+    I --> J["Athena / Quicksight / FastAPI"]
+
+    J --> K["Schema Management
+    Athena DDL / Glue Catalog"]
+
 ```
+---
 
 ### **Raw -> Staging Flow**
 
@@ -51,6 +60,7 @@ Empty to Null, Parse BaseDateTime"]
     I --> J["Write Staging Parquet
  y-m-d"]
 ```
+---
 
 ### **Staging -> Curated Incremental Flow**
 
@@ -140,6 +150,8 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 
 * [2024 Files (zip file size - 116.7 GB, csv file size - 319.5 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2024)  
 * [2025 Files (zip file size - 38.6 GB, csv file size - 136.1 GB)](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2025)
+
+---
 
 ## **Lookup Tables**  
 
