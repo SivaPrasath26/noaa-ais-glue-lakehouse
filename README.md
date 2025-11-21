@@ -154,26 +154,32 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 
 ## **Runbook (Glue 4.0)**
 
-Raw -> Staging:  
-`aws glue start-job-run --job-name noaa-ais-raw-to-staging --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
-`mode=full` ingests all available partitions.
+- Raw -> Staging:  
+  `aws glue start-job-run --job-name noaa-ais-raw-to-staging --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
+  
+  `mode=full` ingests all available partitions.
 
-Staging -> Curated:  
-`aws glue start-job-run --job-name noaa-ais-staging-to-curated --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
-Use `mode=recompute` to seed from `state/by_date=YYYY-MM-DD/` instead of `state/latest` for backfills without state drift.
+- Staging -> Curated:  
+  `aws glue start-job-run --job-name noaa-ais-staging-to-curated --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
+  
+  `mode=recompute` seeds from `state/by_date=YYYY-MM-DD/` instead of `state/latest` for backfills without state drift.
 
-Dimensions:  
-`aws glue start-job-run --job-name noaa-ais-dim-loader`
+- Dimensions:  
+  `aws glue start-job-run --job-name noaa-ais-dim-loader`
 
-Local Spark dry-run (functional validation):  
-`spark-submit pipelines/raw_to_staging.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`  
-`spark-submit pipelines/staging_to_curated.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`
+- Local Spark dry-run (functional validation):  
+  `spark-submit pipelines/raw_to_staging.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`  
+  
+  `spark-submit pipelines/staging_to_curated.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`
 
 ---
 
+
 ## **Configuration**
 
-All S3 paths auto-normalize to `s3a://` in `utils/config.py`. Environment overrides: `S3_RAW_PATH`, `S3_STAGING_PATH`, `S3_CURATED_PATH`, `S3_LOOKUP_PATH`, `GLUE_DATABASE`, `GLUE_TEMP_DIR`, `GLUE_ROLE_NAME`, `AWS_REGION`, `DEFAULT_MODE`, `DEFAULT_DATE`.
+All S3 paths auto-normalize to `s3a://` in `utils/config.py`. 
+
+Environment overrides: `S3_RAW_PATH`, `S3_STAGING_PATH`, `S3_CURATED_PATH`, `S3_LOOKUP_PATH`, `GLUE_DATABASE`, `GLUE_TEMP_DIR`, `GLUE_ROLE_NAME`, `AWS_REGION`, `DEFAULT_MODE`, `DEFAULT_DATE`.
 
 ---
 
