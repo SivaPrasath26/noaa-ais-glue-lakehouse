@@ -165,21 +165,26 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 ---
 
 ## **Runbook (Glue 4.0)**
-
-- Raw -> Staging:  
-  `aws glue start-job-run --job-name noaa-ais-raw-to-staging --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
   
-  `mode=full` ingests all available partitions.
-
-- Staging -> Curated:  
-  `aws glue start-job-run --job-name noaa-ais-staging-to-curated --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
+  - Note: Raw -> Staging is stateless and incremental by scoped partitions only. Staging -> Curated is stateful incremental using state snapshots for voyage continuity.
   
-  `mode=recompute` seeds from `state/by_date=YYYY-MM-DD/` instead of `state/latest` for backfills without state drift.
-
-- Dimensions:  
-  `aws glue start-job-run --job-name noaa-ais-dim-loader`
-
-- Local Spark dry-run (functional validation):  
+  - Raw -> Staging:  
+    `aws glue start-job-run --job-name noaa-ais-raw-to-staging --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
+    
+    `mode=full` ingests all available partitions.
+  
+  - Staging -> Curated:  
+    `aws glue start-job-run --job-name noaa-ais-staging-to-curated --arguments mode=incremental,start_date=2025-01-01,end_date=2025-01-02`  
+    
+    `mode=recompute` seeds from `state/by_date=YYYY-MM-DD/` instead of `state/latest` for backfills without state drift.
+  
+  - Dimensions:  
+    `aws glue start-job-run --job-name noaa-ais-dim-loader`
+  
+  - Ingestion (NOAA -> S3 raw):  
+    `bash ingestion/ingest_2024.sh` (or `ingestion/ingest_2025.sh`). Edit `BUCKET`, `START_MONTH`, `START_DAY` in the script before running; it skips days already present in S3.
+  
+  - Local Spark dry-run (functional validation):  
   `spark-submit pipelines/raw_to_staging.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`  
   
   `spark-submit pipelines/staging_to_curated.py --JOB_NAME local --mode incremental --start_date 2025-01-01 --end_date 2025-01-01`
