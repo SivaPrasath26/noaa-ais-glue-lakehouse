@@ -14,17 +14,63 @@ End-to-end data engineering workflow for high-volume geospatial AIS. The pipelin
 
 ```mermaid
 graph TD
-    A[NOAA AIS Raw CSVs] --> B[S3 Raw Layer]
-    B --> C[AWS Glue Crawler]
-    C --> D[Glue Data Catalog]
-    D --> E[Raw -> Staging (PySpark/Glue)]
-    E --> F[S3 Staging Parquet (year/month/day)]
-    F --> G[State Snapshots (latest + by_date)]
-    F --> H[Staging -> Curated (Trajectory Fact)]
-    H --> I[Voyage State Update]
-    H --> J[Curated Fact: trajectory_points]
-    J --> K[Curated Fact: voyage_summary]
-    K --> L[Athena / Power BI / API]
+    A["NOAA AIS Raw CSVs"] --> B["S3 Raw Layer"]
+    B --> C["AWS Glue Crawler"]
+    C --> D["Glue Data Catalog"]
+    D --> E["Raw to Staging
+ PySpark Glue"]
+    E --> F["S3 Staging Parquet
+ y/m/d"]
+    F --> G["State Snapshots
+ latest and by_date"]
+    F --> H["Staging to Curated
+  Trajectory Fact"]
+    H --> I["Voyage State Update"]
+    H --> J["trajectory_points (curated)"]
+    J --> K["voyage_summary (curated)"]
+    K --> L["Athena / Quicksight / FastAPI"]
+```
+
+### **Raw -> Staging Flow**
+
+```mermaid
+flowchart TD
+    A["NOAA AIS CSV"] --> B["Normalize Columns via Mapping"]
+    B --> C["Enforce Raw Schema
++
+ Cast Types"]
+    C --> D["Clean:
+Empty to Null, Parse BaseDateTime"]
+    D --> E["Validate Coordinates
+ +
+ Quarantine Bad Records"]
+    E --> F["Clamp SOG/COG/Heading"]
+    F --> G["Hash-Based Deduplication"]
+    G --> H["Derive Movement Flag"]
+    H --> I["Partition Columns year/month/day"]
+    I --> J["Write Staging Parquet
+ y-m-d"]
+```
+
+### **Staging -> Curated Incremental Flow**
+
+```mermaid
+flowchart TD
+    A["Staging Data - Daily Partitions"] --> B{Run Mode}
+    B -->|Incremental| C["Load Latest State Snapshot"]
+    B -->|Recompute| D["Load Previous Day State"]
+    C --> E["Identify Window Files"]
+    D --> E
+    E --> F["Load Window Data"]
+    F --> G["Append With Prior State"]
+    G --> H["Sort Per MMSI By Timestamp"]
+    H --> I["Trajectory Reconstruction  Voyage Segmentation  Distance Signals"]
+    I --> J["Write FACT 1"]
+    J --> K["Extract Last Row Per MMSI  Update State Snapshot"]
+    I --> L["Voyage Level Aggregation  Duration Distance Metrics"]
+    L --> M["Write FACT 2"]
+    K --> N["Ready For Next Incremental Cycle"]
+    M --> N
 ```
 
 ---
