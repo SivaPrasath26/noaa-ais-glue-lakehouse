@@ -5,6 +5,7 @@ Runs Fact 1 (trajectory_points) then Fact 2 (voyage_summary) in one Glue job.
 Respect incremental/recompute semantics via Fact 1 state handling.
 """
 
+import os
 import sys
 import time
 from awsglue.context import GlueContext
@@ -58,8 +59,9 @@ def parse_args():
     """
     Resolve Glue job args.
     Required: JOB_NAME, mode (incremental|recompute), start_date, end_date.
+    Optional: LOG_COUNTS (0|1) to control row count logging.
     """
-    return getResolvedOptions(sys.argv, ["JOB_NAME", "mode", "start_date", "end_date"])
+    return getResolvedOptions(sys.argv, ["JOB_NAME", "mode", "start_date", "end_date", "LOG_COUNTS"])
 
 
 # =========================================================
@@ -89,6 +91,9 @@ def run_orchestrator():
     border = "-" * 72
 
     args = parse_args()
+    # Propagate LOG_COUNTS into env so log_df_stats can pick it up
+    if "LOG_COUNTS" in args:
+        os.environ["LOG_COUNTS"] = str(args["LOG_COUNTS"])
     job = Job(glue_ctx)
     try:
         job.init(args["JOB_NAME"], args)
