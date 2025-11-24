@@ -207,14 +207,17 @@ def run_trajectory_job(input_path: str,
 
         log_df_stats(df_curated, "trajectory_points")
 
+        # Control small-file explosion: bucket by MMSI and write with a single partition column.
+        writer_partitions = max(200, len(df_curated.columns))  # floor to keep reasonable parallelism
         (
             df_curated
+            .repartition(writer_partitions, "MMSI")
             .write
             .mode("overwrite")
-            .partitionBy("MMSI", "VoyageID")
+            .partitionBy("MMSI")
             .parquet(output_path)
         )
-        logger.info(f"Trajectory fact written to {output_path}")
+        logger.info(f"Trajectory fact written to {output_path} (partitioned by MMSI)")
 
         # Update state with last row per MMSI after this window
         df_state_out = latest_per_mmsi(df_curated)

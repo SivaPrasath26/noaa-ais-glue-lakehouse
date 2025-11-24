@@ -31,11 +31,11 @@ def build_dim_country(mid_path: str, call_sign_path: str, output_path: str) -> N
         ])
 
         mid_df = (
-            spark.read.format("com.crealytics.spark.excel")
+            spark.read
             .option("header", True)
             .option("inferSchema", False)
             .schema(mid_schema)
-            .load(mid_path)
+            .csv(mid_path)
         )
 
         mid_df = (
@@ -54,11 +54,11 @@ def build_dim_country(mid_path: str, call_sign_path: str, output_path: str) -> N
         ])
 
         cs_df = (
-            spark.read.format("com.crealytics.spark.excel")
+            spark.read
             .option("header", True)
             .option("inferSchema", False)
             .schema(cs_schema)
-            .load(call_sign_path)
+            .csv(call_sign_path)
         )
 
         cs_df = (
