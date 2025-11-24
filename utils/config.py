@@ -39,10 +39,10 @@ DEFAULT_S3_LOOKUP = _env("S3_LOOKUP_PATH", "s3://noaa-ais-lookup-data/")
 DEFAULT_S3_CURATED = _env("S3_CURATED_PATH", "s3://noaa-ais-curated-data/")
 
 # Lookup filenames (no paths, only filenames)
-LOOKUP_MID_FILE = "maritime_identification_digits.xlsx"
-LOOKUP_CALLSIGN_FILE = "international_call_signs.xlsx"
-LOOKUP_NAV_STATUS_FILE = "navigational_status_codes.xlsx"
-LOOKUP_VESSEL_TYPE_FILE = "vessel_type_codes.xlsx"
+LOOKUP_MID_FILE = "maritime_identification_digits.csv"
+LOOKUP_CALLSIGN_FILE = "international_call_signs.csv"
+LOOKUP_NAV_STATUS_FILE = "navigational_status_codes.csv"
+LOOKUP_VESSEL_TYPE_FILE = "vessel_type_codes.csv"
 
 # Output folders for dims
 DIM_COUNTRY_DIR = "dim_country/"
@@ -50,7 +50,7 @@ DIM_NAV_STATUS_DIR = "dim_nav_status/"
 DIM_VESSEL_TYPE_DIR = "dim_vessel_type/"
 
 # --------------------------------------------------------
-# Normalize all S3 defaults to s3a:// (Glue 4.0 compatible)
+# Normalize all S3 defaults to s3a:// (Glue 5.0 compatible)
 # --------------------------------------------------------
 for var_name in list(globals()):
     if var_name.startswith("DEFAULT_S3_") and isinstance(globals()[var_name], str):
@@ -67,6 +67,16 @@ class AISConfig:
     GLUE_DATABASE: str = DEFAULT_GLUE_DATABASE
     GLUE_TEMP_DIR: str = DEFAULT_GLUE_TEMP_DIR
     GLUE_ROLE_NAME: str = DEFAULT_GLUE_ROLE_NAME
+
+    # Lookup filenames and dimension output directories
+    LOOKUP_MID_FILE: str = LOOKUP_MID_FILE
+    LOOKUP_CALLSIGN_FILE: str = LOOKUP_CALLSIGN_FILE
+    LOOKUP_NAV_STATUS_FILE: str = LOOKUP_NAV_STATUS_FILE
+    LOOKUP_VESSEL_TYPE_FILE: str = LOOKUP_VESSEL_TYPE_FILE
+
+    DIM_COUNTRY_DIR: str = DIM_COUNTRY_DIR
+    DIM_NAV_STATUS_DIR: str = DIM_NAV_STATUS_DIR
+    DIM_VESSEL_TYPE_DIR: str = DIM_VESSEL_TYPE_DIR
 
     DEFAULT_PARTITIONS: tuple = ("year", "month", "day")
     DEFAULT_PARAMS: Dict[str, str] = None

@@ -23,11 +23,11 @@ def build_dim_vessel_type(input_path: str, output_path: str) -> None:
         ])
 
         df = (
-            spark.read.format("com.crealytics.spark.excel")
+            spark.read
             .option("header", True)
             .option("inferSchema", False)
             .schema(schema)
-            .load(input_path)
+            .csv(input_path)
         )
 
         # Clean and standardize

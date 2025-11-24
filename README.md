@@ -6,7 +6,7 @@ PySpark and AWS Glue pipeline processing **~4.5 billion rows (~455 GB)** of AIS 
 
 ## **Overview**
 
-End-to-end data engineering workflow for high-volume geospatial AIS. The pipeline standardizes schema, cleans and quarantines bad records, deduplicates via content hashing, enriches with voyage segmentation and spatial features, and serves curated datasets for Athena, BI, and API consumers. Built for Glue 4.0 (Spark 3.5) with modular utilities and unit-tested transforms.
+End-to-end data engineering workflow for high-volume geospatial AIS. The pipeline standardizes schema, cleans and quarantines bad records, deduplicates via content hashing, enriches with voyage segmentation and spatial features, and serves curated datasets for Athena, BI, and API consumers. Built for Glue 5.0 (Spark 3.5) with modular utilities and unit-tested transforms.
 
 ---
 
@@ -164,7 +164,7 @@ AIS vessel position data provided by NOAA’s Office for Coastal Management
 
 ---
 
-## **Runbook (Glue 4.0)**
+## **Runbook (Glue 5.0)**
   
   - Note: Raw -> Staging is stateless and incremental by scoped partitions only. Staging -> Curated is stateful incremental using state snapshots for voyage continuity.
   

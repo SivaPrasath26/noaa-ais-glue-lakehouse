@@ -22,11 +22,11 @@ def build_dim_nav_status(input_path: str, output_path: str) -> None:
         ])
 
         df = (
-            spark.read.format("com.crealytics.spark.excel")
+            spark.read
             .option("header", True)
             .option("inferSchema", False)
             .schema(schema)
-            .load(input_path)
+            .csv(input_path)
         )
 
         # Remove duplicates and nulls
