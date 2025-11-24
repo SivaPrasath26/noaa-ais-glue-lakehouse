@@ -31,7 +31,7 @@ def summarize_voyages(df_traj, output_path: str) -> None:
     Group by MMSI/VoyageID and compute temporal and spatial rollups.
     """
     try:
-        logger.info("Starting voyage-level summary computation")
+        logger.info("Step: voyage_summary - aggregation started")
 
         df = (
             df_traj.groupBy("MMSI", "VoyageID")
@@ -63,9 +63,9 @@ def summarize_voyages(df_traj, output_path: str) -> None:
 
         # Limit small-file explosion: cap writer partitions while still partitioning by MMSI
         df = df.repartition(200, "MMSI")
-        logger.info(f"Writing voyage_summary to {output_path}")
+        logger.info("Step: voyage_summary - write partitioned by MMSI")
         df.write.mode("overwrite").partitionBy("MMSI").parquet(output_path)
-        logger.info(f"Voyage summary written to {output_path}")
+        logger.info(f"Step: voyage_summary - written to {output_path}")
 
     except Exception as e:
         logger.error(f"Voyage summary computation failed: {e}", exc_info=True)

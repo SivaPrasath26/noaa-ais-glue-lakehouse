@@ -38,6 +38,9 @@ DEFAULT_S3_STAGING = _env("S3_STAGING_PATH", "s3://noaa-ais-staging-data/")
 DEFAULT_S3_LOOKUP = _env("S3_LOOKUP_PATH", "s3://noaa-ais-lookup-data/")
 DEFAULT_S3_CURATED = _env("S3_CURATED_PATH", "s3://noaa-ais-curated-data/")
 
+# Toggles
+LOG_COUNTS_DEFAULT = _env("LOG_COUNTS", "0")
+
 # Lookup filenames (no paths, only filenames)
 LOOKUP_MID_FILE = "maritime_identification_digits.csv"
 LOOKUP_CALLSIGN_FILE = "international_call_signs.csv"

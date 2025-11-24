@@ -6,6 +6,7 @@ Respect incremental/recompute semantics via Fact 1 state handling.
 """
 
 import sys
+import time
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
@@ -85,6 +86,7 @@ def run_orchestrator():
     """End-to-end: run trajectory fact then voyage summary for the window."""
     glue_ctx, spark = init_glue()
     logger = setup_logger(__name__)
+    border = "-" * 72
 
     args = parse_args()
     job = Job(glue_ctx)
@@ -100,7 +102,9 @@ def run_orchestrator():
         state_latest = CFG.STATE_LATEST_PATH
         state_by_date = CFG.STATE_BY_DATE_PATH
 
-        # Fact 1: trajectory_points (handles incremental/recompute)
+        logger.info(border)
+        t0 = time.perf_counter()
+        logger.info("Fact 1 (trajectory_points) started")
         run_trajectory_job(
             input_path=staging_path,
             output_path=traj_out,
@@ -110,15 +114,18 @@ def run_orchestrator():
             end_date=args["end_date"],
             mode=args["mode"],
         )
-        logger.info("Fact 1 (trajectory_points) completed.")
+        logger.info(f"Fact 1 (trajectory_points) completed in {time.perf_counter() - t0:.1f}s")
+        logger.info(border)
 
         # Load Fact 1 output for Fact 2 aggregation
         df_traj = spark.read.parquet(traj_out)
         write_checkpoint(df_traj, "trajectory_points_loaded")
 
-        # Optionally filter summary to window; current summarize_voyages aggregates all
+        t1 = time.perf_counter()
+        logger.info("Fact 2 (voyage_summary) started")
         summarize_voyages(df_traj, voy_out)
-        logger.info("Fact 2 (voyage_summary) completed.")
+        logger.info(f"Fact 2 (voyage_summary) completed in {time.perf_counter() - t1:.1f}s")
+        logger.info(border)
 
         logger.info("Curated Orchestrator finished successfully.")
     except Exception as e:
