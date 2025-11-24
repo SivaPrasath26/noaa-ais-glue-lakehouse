@@ -77,6 +77,64 @@ TBLPROPERTIES ('parquet.compression'='SNAPPY');
 -- Discover partitions for the cleaned table
 MSCK REPAIR TABLE noaa_ais_cleaned;
 
+-- =========================================================
+-- 3. CURATED TRAJECTORY POINTS (Parquet, partitioned by mmsi)
+-- =========================================================
+CREATE EXTERNAL TABLE IF NOT EXISTS trajectory_points (
+  BaseDateTime        timestamp,
+  LAT                 double,
+  LON                 double,
+  SOG                 double,
+  COG                 double,
+  Heading             double,
+  VesselName          string,
+  IMO                 string,
+  CallSign            string,
+  VesselType          int,
+  Status              int,
+  Length              double,
+  Width               double,
+  Draft               double,
+  Cargo               int,
+  TransceiverClass    string,
+  MovementFlag        int,
+  year                int,
+  month               int,
+  day                 int,
+  VoyageID            bigint,
+  SegmentDistanceKM   double,
+  GeoHash             string,
+  movement_state      string
+)
+PARTITIONED BY (mmsi bigint)
+STORED AS PARQUET
+LOCATION 's3://noaa-ais-curated-data/trajectory_points/'
+TBLPROPERTIES ('parquet.compression'='SNAPPY');
+
+-- Discover partitions for trajectory_points
+MSCK REPAIR TABLE trajectory_points;
+
+-- =========================================================
+-- 4. CURATED VOYAGE SUMMARY (Parquet, partitioned by mmsi)
+-- =========================================================
+CREATE EXTERNAL TABLE IF NOT EXISTS voyage_summary (
+  VoyageStart        timestamp,
+  VoyageEnd          timestamp,
+  TotalDistanceKM    double,
+  AvgSpeed           double,
+  AvgLAT             double,
+  AvgLON             double,
+  DurationHours      double,
+  VoyageID           bigint
+)
+PARTITIONED BY (mmsi bigint)
+STORED AS PARQUET
+LOCATION 's3://noaa-ais-curated-data/voyage_summary/'
+TBLPROPERTIES ('parquet.compression'='SNAPPY');
+
+-- Discover partitions for voyage_summary
+MSCK REPAIR TABLE voyage_summary;
+
 -- ======================================================================
 -- End of Script
 -- ======================================================================

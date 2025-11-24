@@ -94,6 +94,7 @@ def run_orchestrator():
     # Propagate LOG_COUNTS into env so log_df_stats can pick it up
     if "LOG_COUNTS" in args:
         os.environ["LOG_COUNTS"] = str(args["LOG_COUNTS"])
+    logger.info(f"LOG_COUNTS={os.environ.get('LOG_COUNTS', '0')}")
     job = Job(glue_ctx)
     try:
         job.init(args["JOB_NAME"], args)
