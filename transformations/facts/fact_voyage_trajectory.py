@@ -217,20 +217,21 @@ def run_trajectory_job(input_path: str,
         logger.info("Step: compute trajectory features (voyage segmentation, haversine, geohash, movement state)")
         df_curated = compute_trajectory(df_union, start_ts, end_ts)
 
-        logger.info("Step: write trajectory_points (partitioned by MMSI)")
+        logger.info("Step: write trajectory_points (partitioned by mmsi)")
         log_df_stats(df_curated, "trajectory_points")
 
-        # Control small-file explosion: bucket by MMSI and write with a single partition column.
+        # Control small-file explosion: bucket by mmsi and write with a single partition column (lowercase for Glue/Athena).
+        df_curated = df_curated.withColumn("mmsi", F.col("MMSI"))
         writer_partitions = max(200, len(df_curated.columns))  # floor to keep reasonable parallelism
         (
             df_curated
-            .repartition(writer_partitions, "MMSI")
+            .repartition(writer_partitions, "mmsi")
             .write
             .mode("overwrite")
-            .partitionBy("MMSI")
+            .partitionBy("mmsi")
             .parquet(output_path)
         )
-        logger.info(f"Trajectory fact written to {output_path} (partitioned by MMSI)")
+        logger.info(f"Trajectory fact written to {output_path} (partitioned by mmsi)")
 
         # Update state with last row per MMSI after this window
         df_state_out = latest_per_mmsi(df_curated)
