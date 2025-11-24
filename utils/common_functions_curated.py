@@ -5,9 +5,10 @@ Includes algorithms: hashing via JSON-struct, sliding-window voyage
 segmentation, spatial grid quantization, and distributed sorting.
 """
 
+import os
 from pyspark.sql import DataFrame, functions as F, Window
 from pyspark.sql.types import IntegerType, StringType
-from utils.config import setup_logger
+from utils.config import setup_logger, LOG_COUNTS_DEFAULT
 from utils.column_mapping import COLUMN_MAPPING
 
 # Initialize logger
@@ -215,6 +216,10 @@ def log_df_stats(df: DataFrame, label: str) -> None:
         3. Emit metrics into logger for checkpoint diagnostics.
     """
     try:
+        if os.getenv("LOG_COUNTS", LOG_COUNTS_DEFAULT) != "1":
+            logger.info(f"[{label}] row counts skipped (set LOG_COUNTS=1 to enable).")
+            return
+
         total = df.count()
         distinct = df.select("MMSI").distinct().count() if "MMSI" in df.columns else 0
         logger.info(f"[{label}] total={total}, distinct_mmsi={distinct}")

@@ -3,6 +3,7 @@ State IO utilities for AIS incremental processing.
 Handles reading/writing MMSI-level state snapshots for voyage continuity.
 """
 
+from uuid import uuid4
 from pyspark.sql import DataFrame, SparkSession, functions as F, Window
 from utils.schema_definitions import STATE_SNAPSHOT_SCHEMA
 
@@ -26,13 +27,35 @@ def read_state_snapshot(spark: SparkSession, path: str, fallback_empty: bool = T
 # Purpose: persist compact state (one row per MMSI) to a path
 # =========================================================
 def write_state_snapshot(df: DataFrame, path: str) -> None:
-    """Write state snapshot (one row per MMSI)."""
+    """
+    Write state snapshot (one row per MMSI) via temp + copy to avoid partial writes.
+    """
+    spark = df.sparkSession
+    base = path.rstrip("/") + "/"
+    tmp_path = f"{base.rstrip('/')}_tmp_{uuid4().hex}/"
+
+    # Write temp
     (
         df.select("MMSI", "BaseDateTime", "LAT", "LON", "VoyageID")
         .dropna(subset=["MMSI"])
         .write.mode("overwrite")
-        .parquet(path)
+        .parquet(tmp_path)
     )
+
+    # Copy temp to final
+    df_tmp = spark.read.parquet(tmp_path)
+    (
+        df_tmp.write
+        .mode("overwrite")
+        .parquet(base)
+    )
+
+    # Cleanup temp
+    try:
+        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(spark._jsc.hadoopConfiguration())
+        fs.delete(spark._jvm.org.apache.hadoop.fs.Path(tmp_path), True)
+    except Exception:
+        pass
 
 
 # =========================================================

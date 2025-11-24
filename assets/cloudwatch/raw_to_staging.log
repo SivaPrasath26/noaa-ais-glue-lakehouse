@@ -1,0 +1,15 @@
+2025-11-16 07:29:14,638 [INFO] Glue-safe logging initialized. Log file: /tmp/logs/etl_log_2025-11-16_07-29-14.log
+2025-11-16 07:29:14,639 [INFO] Glue job initialized successfully
+2025-11-16 07:29:14,642 [INFO] Spark version: 3.5.4-amzn-0
+2025-11-16 07:29:14,642 [INFO] Starting NOAA AIS ETL Glue job execution
+2025-11-16 07:29:14,645 [INFO] Running batch load from 2024-01-01 to 2024-01-01 (1 days)
+2025-11-16 07:29:14,645 [INFO] Processing date path: s3a://noaa-ais-raw-data/year=2024/month=01/day=01/ (derived date: 2024-01-01-)
+2025-11-16 07:29:14,645 [INFO] Reading raw data from s3a://noaa-ais-raw-data/year=2024/month=01/day=01/
+2025-11-16 07:29:31,995 [INFO] Starting data cleaning process
+2025-11-16 07:30:04,878 [INFO] No invalid coordinate records to quarantine.
+2025-11-16 07:30:05,046 [INFO] Adding movement flag
+2025-11-16 07:30:56,492 [INFO] Partition to be written: year=2024/month=01/day=01
+2025-11-16 07:31:33,643 [INFO] Raw to staging transformation completed successfully.
+2025-11-16 07:31:33,643 [INFO] Finalizing and committing Glue job
+2025-11-16 07:31:33,644 [INFO] Glue job committed successfully.
+Running autoDebugger shutdown hook.

@@ -109,12 +109,14 @@ def load_staging_window(spark: SparkSession, base_path: str, start_date: str, en
 # =========================================================
 def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     """Seeded voyage segmentation, distance, geohash, and movement state."""
+    logger.info("Step: compute_trajectory - start window filtering and feature derivation")
     w = Window.partitionBy("MMSI").orderBy("BaseDateTime")
 
     # Ordered timeline per MMSI, including seed row to connect prior day
     df = df_input
 
     # Lag-based features (includes seed rows so day1 compares to day0)
+    logger.info("Step: compute_trajectory - deriving lag features (PrevTime, PrevLAT, PrevLON)")
     df = df.withColumn("PrevTime", F.lag("BaseDateTime").over(w))
     df = df.withColumn("GapHours", (
         F.unix_timestamp("BaseDateTime") - F.unix_timestamp("PrevTime")
@@ -124,6 +126,7 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     df = df.withColumn("PrevLON", F.lag("LON").over(w))
 
     # Voyage offset from state seed
+    logger.info("Step: compute_trajectory - computing voyage_id with seed continuity and 3h gap rule")
     base_voyage = F.first("SeedVoyageID", ignorenulls=True).over(Window.partitionBy("MMSI"))
     voyage_increments = F.sum(F.when(F.col("GapHours") > 3, 1).otherwise(0)).over(
         w.rowsBetween(Window.unboundedPreceding, 0)
@@ -131,6 +134,7 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     df = df.withColumn("VoyageID", F.coalesce(base_voyage, F.lit(0)) + voyage_increments)
 
     # Distance and spatial index
+    logger.info("Step: compute_trajectory - calculating haversine distance and geohash")
     df = df.withColumn(
         "SegmentDistanceKM",
         calculate_haversine("PrevLAT", "PrevLON", "LAT", "LON"),
@@ -138,6 +142,7 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     df = add_geohash(df, lat_col="LAT", lon_col="LON", precision=6)
 
     # Cast curated schema expectations
+    logger.info("Step: compute_trajectory - casting numeric columns to curated types")
     df = safe_cast_columns(
         df,
         {
@@ -149,9 +154,11 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
         },
     )
 
+    logger.info("Step: compute_trajectory - deriving movement_state")
     df = add_movement_state(df, sog_col="SOG", threshold=0.5)
 
     # Drop seeds from curated outputs; keep only target window rows
+    logger.info("Step: compute_trajectory - filtering window and dropping seed rows")
     df_output = df.filter(~F.col("is_seed"))
     df_output = df_output.filter(
         (F.col("BaseDateTime") >= F.lit(start_ts)) &
@@ -159,6 +166,7 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     )
 
     # Clean helpers
+    logger.info("Step: compute_trajectory - dropping helper columns and returning")
     return df_output.drop("PrevTime", "PrevLAT", "PrevLON", "GapHours", "SeedVoyageID", "is_seed")
 
 
@@ -182,6 +190,7 @@ def run_trajectory_job(input_path: str,
         spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
         logger.info(f"Run mode={mode}, window={start_date}..{end_date}")
+        logger.info("Step: load staging window")
 
         # Load data
         df_staging = load_staging_window(spark, input_path, start_date, end_date)
@@ -190,21 +199,25 @@ def run_trajectory_job(input_path: str,
 
         if mode == "recompute":
             seed_date = (start_date_obj - timedelta(days=1)).isoformat()
-            logger.info(f"Recompute mode: seeding with state from {seed_date}")
+            logger.info(f"Step: load state seed (recompute) from {seed_date}")
             df_state = read_state_by_date(
                 spark, state_by_date_prefix, seed_date, fallback_empty=True
             )
         else:
+            logger.info("Step: load state seed (latest)")
             df_state = read_state_snapshot(spark, state_latest_path, fallback_empty=True)
 
         # Prepare seed and union (prior day state + window staging)
+        logger.info("Step: prepare seeded union of state + staging")
         df_union = prepare_seeded_union(df_state, df_staging, voyage_col="VoyageID")
 
         start_ts = datetime.combine(start_date_obj, datetime.min.time())
         end_ts = datetime.combine(end_date_obj + timedelta(days=1), datetime.min.time())
 
+        logger.info("Step: compute trajectory features (voyage segmentation, haversine, geohash, movement state)")
         df_curated = compute_trajectory(df_union, start_ts, end_ts)
 
+        logger.info("Step: write trajectory_points (partitioned by MMSI)")
         log_df_stats(df_curated, "trajectory_points")
 
         # Control small-file explosion: bucket by MMSI and write with a single partition column.
