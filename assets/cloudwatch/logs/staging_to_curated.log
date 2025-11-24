@@ -1,0 +1,38 @@
+2025-11-24 08:14:24,704 [INFO] Glue-safe logging initialized. Log file: /tmp/logs/etl_log_2025-11-24_08-14-24.log
+2025-11-24 08:14:24,709 [INFO] Glue-safe logging initialized. Log file: /tmp/logs/etl_log_2025-11-24_08-14-24.log
+2025-11-24 08:14:24,712 [INFO] Glue-safe logging initialized. Log file: /tmp/logs/etl_log_2025-11-24_08-14-24.log
+2025-11-24 08:14:34,577 [INFO] Glue-safe logging initialized. Log file: /tmp/logs/etl_log_2025-11-24_08-14-34.log
+2025-11-24 08:14:34,579 [INFO] LOG_COUNTS=1
+2025-11-24 08:14:36,409 [INFO] Curated Orchestrator started. Spark 3.5.4-amzn-0
+2025-11-24 08:14:36,409 [INFO] Mode=incremental window=2024-01-01..2024-01-01
+2025-11-24 08:14:36,409 [INFO] ------------------------------------------------------------------------
+2025-11-24 08:14:36,409 [INFO] Fact 1 (trajectory_points) started
+2025-11-24 08:14:36,440 [INFO] Run mode=incremental, window=2024-01-01..2024-01-01
+2025-11-24 08:14:36,440 [INFO] Step: load staging window
+2025-11-24 08:14:40,056 [INFO] Step: load state seed (latest)
+2025-11-24 08:14:44,165 [INFO] Step: prepare seeded union of state + staging
+2025-11-24 08:14:44,410 [INFO] Step: compute trajectory features (voyage segmentation, haversine, geohash, movement state)
+2025-11-24 08:14:44,410 [INFO] Step: compute_trajectory - start window filtering and feature derivation
+2025-11-24 08:14:44,431 [INFO] Step: compute_trajectory - deriving lag features (PrevTime, PrevLAT, PrevLON)
+2025-11-24 08:14:44,638 [INFO] Step: compute_trajectory - computing voyage_id with seed continuity and 3h gap rule
+2025-11-24 08:14:44,740 [INFO] Step: compute_trajectory - calculating haversine distance and geohash
+2025-11-24 08:14:44,890 [INFO] Step: compute_trajectory - casting numeric columns to curated types
+2025-11-24 08:14:45,063 [INFO] Step: compute_trajectory - deriving movement_state
+2025-11-24 08:14:45,096 [INFO] Step: compute_trajectory - filtering window and dropping seed rows
+2025-11-24 08:14:45,143 [INFO] Step: compute_trajectory - dropping helper columns and returning
+2025-11-24 08:14:45,161 [INFO] Step: write trajectory_points (partitioned by mmsi)
+2025-11-24 08:14:58,458 [INFO] [trajectory_points] total=7296060, distinct_mmsi=14868
+2025-11-24 08:19:25,753 [INFO] Trajectory fact written to s3a://noaa-ais-curated-data/trajectory_points/ (partitioned by mmsi)
+2025-11-24 08:19:36,073 [INFO] State snapshot updated at s3a://noaa-ais-curated-data/state/latest/ and dated version for 2024-01-01
+2025-11-24 08:19:36,074 [INFO] Fact 1 (trajectory_points) completed in 299.7s
+2025-11-24 08:19:36,074 [INFO] ------------------------------------------------------------------------
+2025-11-24 08:19:58,710 [INFO] [CHECKPOINT trajectory_points_loaded] rows=7296060, distinct_mmsi=0
+2025-11-24 08:19:58,711 [INFO] Fact 2 (voyage_summary) started
+2025-11-24 08:19:58,711 [INFO] Step: voyage_summary - aggregation started
+2025-11-24 08:20:11,885 [INFO] [voyage_summary] total=16434, distinct_mmsi=14868
+2025-11-24 08:20:11,897 [INFO] Step: voyage_summary - write partitioned by MMSI
+2025-11-24 08:24:10,054 [INFO] Step: voyage_summary - written to s3a://noaa-ais-curated-data/voyage_summary/
+2025-11-24 08:24:10,055 [INFO] Fact 2 (voyage_summary) completed in 251.3s
+2025-11-24 08:24:10,055 [INFO] ------------------------------------------------------------------------
+2025-11-24 08:24:10,055 [INFO] Curated Orchestrator finished successfully.
+2025-11-24 08:24:10,056 [INFO] Glue job committed.
