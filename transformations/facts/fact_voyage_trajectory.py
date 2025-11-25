@@ -24,9 +24,7 @@ from utils.common_functions_curated import (
 from utils.config import setup_logger, CFG
 from utils.schema_definitions import AIS_STAGING_SCHEMA
 from utils.state_io import (
-    read_state_snapshot,
     read_state_by_date,
-    write_state_snapshot,
     write_state_by_date,
     latest_per_mmsi,
 )
@@ -197,15 +195,11 @@ def run_trajectory_job(input_path: str,
         start_date_obj = _parse_date(start_date)
         end_date_obj = _parse_date(end_date)
 
-        if mode == "recompute":
-            seed_date = (start_date_obj - timedelta(days=1)).isoformat()
-            logger.info(f"Step: load state seed (recompute) from {seed_date}")
-            df_state = read_state_by_date(
-                spark, state_by_date_prefix, seed_date, fallback_empty=True
-            )
-        else:
-            logger.info("Step: load state seed (latest)")
-            df_state = read_state_snapshot(spark, state_latest_path, fallback_empty=True)
+        seed_date = (start_date_obj - timedelta(days=1)).isoformat()
+        logger.info(f"Step: load state seed from prior day {seed_date}")
+        df_state = read_state_by_date(
+            spark, state_by_date_prefix, seed_date, fallback_empty=True
+        )
 
         # Prepare seed and union (prior day state + window staging)
         logger.info("Step: prepare seeded union of state + staging")
@@ -233,12 +227,11 @@ def run_trajectory_job(input_path: str,
         )
         logger.info(f"Trajectory fact written to {output_path} (partitioned by mmsi)")
 
-        # Update state with last row per MMSI after this window
+        # Update state with last row per MMSI after this window (by_date only)
         df_state_out = latest_per_mmsi(df_curated)
-        write_state_snapshot(df_state_out, state_latest_path)
         write_state_by_date(df_state_out, state_by_date_prefix, end_date_obj.isoformat())
         logger.info(
-            f"State snapshot updated at {state_latest_path} and dated version for {end_date_obj.isoformat()}"
+            f"State snapshot written for {end_date_obj.isoformat()} under by_date"
         )
 
     except Exception as e:

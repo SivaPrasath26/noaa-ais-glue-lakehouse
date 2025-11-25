@@ -3,59 +3,8 @@ State IO utilities for AIS incremental processing.
 Handles reading/writing MMSI-level state snapshots for voyage continuity.
 """
 
-from uuid import uuid4
 from pyspark.sql import DataFrame, SparkSession, functions as F, Window
 from utils.schema_definitions import STATE_SNAPSHOT_SCHEMA
-
-
-# =========================================================
-# read_state_snapshot
-# Purpose: load latest state snapshot safely
-# =========================================================
-def read_state_snapshot(spark: SparkSession, path: str, fallback_empty: bool = True) -> DataFrame:
-    """Read the latest state snapshot. Optionally return empty DataFrame if missing."""
-    try:
-        return spark.read.schema(STATE_SNAPSHOT_SCHEMA).parquet(path)
-    except Exception:
-        if not fallback_empty:
-            raise
-        return spark.createDataFrame([], schema=STATE_SNAPSHOT_SCHEMA)
-
-
-# =========================================================
-# write_state_snapshot
-# Purpose: persist compact state (one row per MMSI) to a path
-# =========================================================
-def write_state_snapshot(df: DataFrame, path: str) -> None:
-    """
-    Write state snapshot (one row per MMSI) via temp + copy to avoid partial writes.
-    """
-    spark = df.sparkSession
-    base = path.rstrip("/") + "/"
-    tmp_path = f"{base.rstrip('/')}_tmp_{uuid4().hex}/"
-
-    # Write temp
-    (
-        df.select("MMSI", "BaseDateTime", "LAT", "LON", "VoyageID")
-        .dropna(subset=["MMSI"])
-        .write.mode("overwrite")
-        .parquet(tmp_path)
-    )
-
-    # Copy temp to final
-    df_tmp = spark.read.parquet(tmp_path)
-    (
-        df_tmp.write
-        .mode("overwrite")
-        .parquet(base)
-    )
-
-    # Cleanup temp
-    try:
-        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(spark._jsc.hadoopConfiguration())
-        fs.delete(spark._jvm.org.apache.hadoop.fs.Path(tmp_path), True)
-    except Exception:
-        pass
 
 
 # =========================================================
@@ -72,7 +21,12 @@ def read_state_by_date(
     Read a dated state snapshot. Expects prefix like '.../state/by_date='.
     """
     path = by_date_prefix.rstrip("/") + f"{date_str}/"
-    return read_state_snapshot(spark, path, fallback_empty=fallback_empty)
+    try:
+        return spark.read.schema(STATE_SNAPSHOT_SCHEMA).parquet(path)
+    except Exception:
+        if not fallback_empty:
+            raise
+        return spark.createDataFrame([], schema=STATE_SNAPSHOT_SCHEMA)
 
 
 # =========================================================
@@ -82,7 +36,13 @@ def read_state_by_date(
 def write_state_by_date(df: DataFrame, by_date_prefix: str, date_str: str) -> None:
     """Write a dated state snapshot for a given day."""
     path = by_date_prefix.rstrip("/") + f"{date_str}/"
-    write_state_snapshot(df, path)
+    (
+        df.select("MMSI", "BaseDateTime", "LAT", "LON", "VoyageID")
+        .dropna(subset=["MMSI"])
+        .coalesce(1)
+        .write.mode("overwrite")
+        .parquet(path)
+    )
 
 
 # =========================================================
