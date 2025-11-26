@@ -77,7 +77,7 @@ SCHEMA_MAP = {
 # STATE SNAPSHOT SCHEMA - compact per-MMSI continuity (curated state)
 # ----------------------------------------------------------
 STATE_SNAPSHOT_SCHEMA = StructType([
-    StructField("MMSI", StringType(), False),
+    StructField("MMSI", IntegerType(), False),
     StructField("BaseDateTime", TimestampType(), True),
     StructField("LAT", DoubleType(), True),
     StructField("LON", DoubleType(), True),

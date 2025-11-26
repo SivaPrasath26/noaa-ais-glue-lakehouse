@@ -78,7 +78,7 @@ TBLPROPERTIES ('parquet.compression'='SNAPPY');
 MSCK REPAIR TABLE noaa_ais_cleaned;
 
 -- =========================================================
--- 3. CURATED TRAJECTORY POINTS (Parquet, partitioned by mmsi)
+-- 3. CURATED TRAJECTORY POINTS (Parquet, partitioned by date)
 -- =========================================================
 CREATE EXTERNAL TABLE IF NOT EXISTS trajectory_points (
   BaseDateTime        timestamp,
@@ -98,15 +98,13 @@ CREATE EXTERNAL TABLE IF NOT EXISTS trajectory_points (
   Cargo               int,
   TransceiverClass    string,
   MovementFlag        int,
-  year                int,
-  month               int,
-  day                 int,
+  mmsi                bigint,
   VoyageID            bigint,
   SegmentDistanceKM   double,
   GeoHash             string,
   movement_state      string
 )
-PARTITIONED BY (mmsi bigint)
+PARTITIONED BY (year int, month int, day int)
 STORED AS PARQUET
 LOCATION 's3://noaa-ais-curated-data/trajectory_points/'
 TBLPROPERTIES ('parquet.compression'='SNAPPY');
@@ -115,7 +113,7 @@ TBLPROPERTIES ('parquet.compression'='SNAPPY');
 MSCK REPAIR TABLE trajectory_points;
 
 -- =========================================================
--- 4. CURATED VOYAGE SUMMARY (Parquet, partitioned by mmsi)
+-- 4. CURATED VOYAGE SUMMARY (Parquet, coalesced)
 -- =========================================================
 CREATE EXTERNAL TABLE IF NOT EXISTS voyage_summary (
   VoyageStart        timestamp,
@@ -125,15 +123,12 @@ CREATE EXTERNAL TABLE IF NOT EXISTS voyage_summary (
   AvgLAT             double,
   AvgLON             double,
   DurationHours      double,
-  VoyageID           bigint
+  VoyageID           bigint,
+  mmsi               bigint
 )
-PARTITIONED BY (mmsi bigint)
 STORED AS PARQUET
 LOCATION 's3://noaa-ais-curated-data/voyage_summary/'
 TBLPROPERTIES ('parquet.compression'='SNAPPY');
-
--- Discover partitions for voyage_summary
-MSCK REPAIR TABLE voyage_summary;
 
 -- ======================================================================
 -- End of Script
