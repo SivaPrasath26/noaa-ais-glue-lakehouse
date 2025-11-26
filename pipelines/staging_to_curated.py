@@ -72,7 +72,11 @@ def write_checkpoint(df, label: str):
     """Lightweight checkpoint for row/mmsi counts."""
     try:
         cnt = df.count()
-        distinct_mmsi = df.select("MMSI").distinct().count() if "MMSI" in df.columns else 0
+        distinct_mmsi = 0
+        if "mmsi" in df.columns:
+            distinct_mmsi = df.select("mmsi").distinct().count()
+        elif "MMSI" in df.columns:
+            distinct_mmsi = df.select("MMSI").distinct().count()
         logger = setup_logger(__name__)
         logger.info(f"[CHECKPOINT {label}] rows={cnt}, distinct_mmsi={distinct_mmsi}")
     except Exception as e:

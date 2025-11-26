@@ -23,7 +23,7 @@ graph TD
     y/m/d"]
 
     D --> E["State Snapshots
-    latest and by_date"]
+    by_date"]
     D --> F["Staging to Curated
     Trajectory Fact"]
 
@@ -66,21 +66,18 @@ Empty to Null, Parse BaseDateTime"]
 
 ```mermaid
 flowchart TD
-    A["Staging Data - Daily Partitions"] --> B{Run Mode}
-    B -->|Incremental| C["Load Latest State Snapshot"]
-    B -->|Recompute| D["Load Previous Day State"]
-    C --> E["Identify Window Files"]
-    D --> E
-    E --> F["Load Window Data"]
-    F --> G["Append With Prior State"]
-    G --> H["Sort Per MMSI By Timestamp"]
-    H --> I["Trajectory Reconstruction  Voyage Segmentation  Distance Signals"]
-    I --> J["Write FACT 1"]
-    J --> K["Extract Last Row Per MMSI  Update State Snapshot"]
-    I --> L["Voyage Level Aggregation  Duration Distance Metrics"]
-    L --> M["Write FACT 2"]
-    K --> N["Ready For Next Incremental Cycle"]
-    M --> N
+    A["Staging Data - Daily Partitions"] --> B["Load Prior-Day State (by_date)"]
+    A --> C["Load Window Data"]
+    B --> D["Append With Prior State"]
+    C --> D
+    D --> E["Sort Per MMSI By Timestamp"]
+    E --> F["Trajectory Reconstruction + Sampling"]
+    F --> G["Write FACT 1 (date/mmsi, window-scoped replace)"]
+    F --> H["State Snapshot (by_date=end_date)"]
+    G --> I["Voyage Level Aggregation (FACT 2)"]
+    I --> J["Write FACT 2 (coalesced)"]
+    H --> K["Ready For Next Incremental Cycle"]
+    J --> K
 ```
 
 ---
@@ -90,7 +87,7 @@ flowchart TD
 * Processes > 450 GB (2024 + 2025) of AIS data with distributed PySpark jobs on Glue.
 * Modular three-stage pipeline: **Raw -> Staging -> Curated** with stateful incremental/recompute to avoid double-counting.
 * Cleansing: column normalization, schema enforcement, empty-to-null, coordinate validation with quarantine, SOG/COG/Heading clamping, hash-based deduplication, movement flagging.
-* Curated facts: voyage segmentation (3h gap rule), haversine segment distance, geohash indexing, spatial grid options, voyage summaries.
+  * Curated facts: voyage segmentation (3h gap rule), haversine segment distance, geohash indexing, spatial grid options, voyage summaries; trajectory fact is sampled (endpoints kept, SOG-based fast/slow cadence, sparse anchors) and partitioned by `year/month/day/mmsi` with window-scoped overwrite.
 * Dimensions: country (MID + call sign), navigational status, vessel type from S3 lookups.
 * Testing: PySpark unit and integration coverage for transformations and schemas.
 * Built for downstream analytics, BI, and backend/API integration.
