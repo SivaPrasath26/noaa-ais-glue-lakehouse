@@ -9,7 +9,7 @@ Adds state seeding to keep voyage continuity across days.
 import argparse
 from datetime import date, datetime, timedelta
 
-from pyspark.sql import SparkSession, Window
+from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 
@@ -24,9 +24,7 @@ from utils.common_functions_curated import (
 from utils.config import setup_logger, CFG
 from utils.schema_definitions import AIS_STAGING_SCHEMA
 from utils.state_io import (
-    read_state_snapshot,
     read_state_by_date,
-    write_state_snapshot,
     write_state_by_date,
     latest_per_mmsi,
 )
@@ -170,6 +168,78 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
     return df_output.drop("PrevTime", "PrevLAT", "PrevLON", "GapHours", "SeedVoyageID", "is_seed")
 
 
+# =========================================================
+# sample_trajectory
+# Purpose: reduce trajectory density while keeping path fidelity
+# =========================================================
+def sample_trajectory(df_input: DataFrame,
+                      fast_sog_threshold_knots: float = 12.0,
+                      fast_interval_min: int = 10,
+                      slow_interval_min: int = 30,
+                      anchor_interval_min: int = 120) -> DataFrame:
+    """
+    Sample points by:
+      - keeping all day/voyage endpoints
+      - keeping moving points sampled per bucket (fast vs slow cadence)
+      - keeping anchored points sparsely (default first/last per 120m bucket)
+    Then recompute segment distances on the sampled set.
+    """
+    df = df_input
+
+    df = (
+        df
+        .withColumn(
+            "bucket_move",
+            F.floor(
+                F.unix_timestamp("BaseDateTime") /
+                F.when(F.coalesce(F.col("SOG"), F.lit(0.0)) >= fast_sog_threshold_knots,
+                       fast_interval_min * 60)
+                 .otherwise(slow_interval_min * 60)
+            )
+        )
+        .withColumn("bucket_anchor", F.floor(F.unix_timestamp("BaseDateTime") / (anchor_interval_min * 60)))
+        .withColumn("year", F.year("BaseDateTime"))
+        .withColumn("month", F.month("BaseDateTime"))
+        .withColumn("day", F.dayofmonth("BaseDateTime"))
+    )
+
+    w_move = Window.partitionBy("MMSI", "VoyageID", "bucket_move").orderBy("BaseDateTime")
+    w_anchor_asc = Window.partitionBy("MMSI", "VoyageID", "bucket_anchor").orderBy("BaseDateTime")
+    w_anchor_desc = Window.partitionBy("MMSI", "VoyageID", "bucket_anchor").orderBy(F.col("BaseDateTime").desc())
+    w_day_first = Window.partitionBy("MMSI", "year", "month", "day").orderBy("BaseDateTime")
+    w_day_last = Window.partitionBy("MMSI", "year", "month", "day").orderBy(F.col("BaseDateTime").desc())
+
+    df = (
+        df
+        .withColumn("keep_move", F.when(F.col("movement_state") != "anchored", F.row_number().over(w_move)).otherwise(F.lit(None)))
+        .withColumn("keep_anchor_first", F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_asc)).otherwise(F.lit(None)))
+        .withColumn("keep_anchor_last", F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_desc)).otherwise(F.lit(None)))
+        .withColumn("keep_day_first", F.row_number().over(w_day_first))
+        .withColumn("keep_day_last", F.row_number().over(w_day_last))
+    )
+
+    df = df.filter(
+        (F.col("keep_move") == 1) |
+        (F.col("keep_anchor_first") == 1) |
+        (F.col("keep_anchor_last") == 1) |
+        (F.col("keep_day_first") == 1) |
+        (F.col("keep_day_last") == 1)
+    )
+
+    df = df.drop("bucket_move", "bucket_anchor", "keep_move", "keep_anchor_first", "keep_anchor_last", "keep_day_first", "keep_day_last")
+
+    # Recompute distances on sampled set
+    w_prev = Window.partitionBy("MMSI", "VoyageID").orderBy("BaseDateTime")
+    df = df.withColumn("PrevLAT_thin", F.lag("LAT").over(w_prev))
+    df = df.withColumn("PrevLON_thin", F.lag("LON").over(w_prev))
+    df = df.withColumn(
+        "SegmentDistanceKM",
+        calculate_haversine("PrevLAT_thin", "PrevLON_thin", "LAT", "LON"),
+    )
+    df = df.drop("PrevLAT_thin", "PrevLON_thin")
+
+    return df
+
 # -----------------------------------------------------------------------------
 # Main job
 # -----------------------------------------------------------------------------
@@ -197,15 +267,11 @@ def run_trajectory_job(input_path: str,
         start_date_obj = _parse_date(start_date)
         end_date_obj = _parse_date(end_date)
 
-        if mode == "recompute":
-            seed_date = (start_date_obj - timedelta(days=1)).isoformat()
-            logger.info(f"Step: load state seed (recompute) from {seed_date}")
-            df_state = read_state_by_date(
-                spark, state_by_date_prefix, seed_date, fallback_empty=True
-            )
-        else:
-            logger.info("Step: load state seed (latest)")
-            df_state = read_state_snapshot(spark, state_latest_path, fallback_empty=True)
+        seed_date = (start_date_obj - timedelta(days=1)).isoformat()
+        logger.info(f"Step: load state seed from prior day {seed_date}")
+        df_state = read_state_by_date(
+            spark, state_by_date_prefix, seed_date, fallback_empty=True
+        )
 
         # Prepare seed and union (prior day state + window staging)
         logger.info("Step: prepare seeded union of state + staging")
@@ -217,28 +283,40 @@ def run_trajectory_job(input_path: str,
         logger.info("Step: compute trajectory features (voyage segmentation, haversine, geohash, movement state)")
         df_curated = compute_trajectory(df_union, start_ts, end_ts)
 
-        logger.info("Step: write trajectory_points (partitioned by mmsi)")
-        log_df_stats(df_curated, "trajectory_points")
+        logger.info("Step: write trajectory_points (partitioned by date,mmsi)")
+        log_df_stats(df_curated, "trajectory_points_full")
 
-        # Control small-file explosion: bucket by mmsi and write with a single partition column (lowercase for Glue/Athena).
-        df_curated = df_curated.withColumn("mmsi", F.col("MMSI"))
-        writer_partitions = max(200, len(df_curated.columns))  # floor to keep reasonable parallelism
-        (
-            df_curated
+        df_thin = sample_trajectory(df_curated)
+        log_df_stats(df_thin, "trajectory_points_sampled")
+
+        dates = []
+        d_iter = start_date_obj
+        one_day = timedelta(days=1)
+        while d_iter <= end_date_obj:
+            dates.append(d_iter)
+            d_iter += one_day
+        date_filter_expr = " OR ".join(
+            [f"year={d.year} AND month={d.month} AND day={d.day}" for d in dates]
+        )
+
+        writer_partitions = max(200, len(df_thin.columns))
+        writer = (
+            df_thin
             .repartition(writer_partitions, "mmsi")
             .write
             .mode("overwrite")
-            .partitionBy("mmsi")
-            .parquet(output_path)
+            .partitionBy("year", "month", "day", "mmsi")
         )
-        logger.info(f"Trajectory fact written to {output_path} (partitioned by mmsi)")
+        if date_filter_expr:
+            writer = writer.option("replaceWhere", date_filter_expr)
+        writer.parquet(output_path)
+        logger.info(f"Trajectory fact written to {output_path} (partitioned by year/month/day/mmsi)")
 
-        # Update state with last row per MMSI after this window
+        # Update state with last row per MMSI after this window (by_date only)
         df_state_out = latest_per_mmsi(df_curated)
-        write_state_snapshot(df_state_out, state_latest_path)
         write_state_by_date(df_state_out, state_by_date_prefix, end_date_obj.isoformat())
         logger.info(
-            f"State snapshot updated at {state_latest_path} and dated version for {end_date_obj.isoformat()}"
+            f"State snapshot written for {end_date_obj.isoformat()} under by_date"
         )
 
     except Exception as e:

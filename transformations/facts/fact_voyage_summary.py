@@ -61,10 +61,13 @@ def summarize_voyages(df_traj, output_path: str) -> None:
 
         log_df_stats(df, "voyage_summary")
 
-        # Limit small-file explosion: cap writer partitions while still partitioning by MMSI
-        df = df.repartition(200, "MMSI")
-        logger.info("Step: voyage_summary - write partitioned by MMSI")
-        df.write.mode("overwrite").partitionBy("MMSI").parquet(output_path)
+        logger.info("Step: voyage_summary - write")
+        (
+            df.coalesce(1)
+            .write
+            .mode("overwrite")
+            .parquet(output_path)
+        )
         logger.info(f"Step: voyage_summary - written to {output_path}")
 
     except Exception as e:
