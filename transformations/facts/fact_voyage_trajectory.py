@@ -283,7 +283,7 @@ def run_trajectory_job(input_path: str,
         logger.info("Step: compute trajectory features (voyage segmentation, haversine, geohash, movement state)")
         df_curated = compute_trajectory(df_union, start_ts, end_ts)
 
-        logger.info("Step: write trajectory_points (partitioned by date,mmsi)")
+        logger.info("Step: write trajectory_points (partitioned by date)")
         log_df_stats(df_curated, "trajectory_points_full")
 
         df_thin = sample_trajectory(df_curated)
@@ -305,12 +305,12 @@ def run_trajectory_job(input_path: str,
             .repartition(writer_partitions, "mmsi")
             .write
             .mode("overwrite")
-            .partitionBy("year", "month", "day", "mmsi")
+            .partitionBy("year", "month", "day")
         )
         if date_filter_expr:
             writer = writer.option("replaceWhere", date_filter_expr)
         writer.parquet(output_path)
-        logger.info(f"Trajectory fact written to {output_path} (partitioned by year/month/day/mmsi)")
+        logger.info(f"Trajectory fact written to {output_path} (partitioned by year/month/day)")
 
         # Update state with last row per MMSI after this window (by_date only)
         df_state_out = latest_per_mmsi(df_curated)
