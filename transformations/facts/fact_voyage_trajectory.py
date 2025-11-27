@@ -172,73 +172,114 @@ def compute_trajectory(df_input, start_ts: datetime, end_ts: datetime):
 # sample_trajectory
 # Purpose: reduce trajectory density while keeping path fidelity
 # =========================================================
-def sample_trajectory(df_input: DataFrame,
-                      fast_sog_threshold_knots: float = 12.0,
-                      fast_interval_min: int = 10,
-                      slow_interval_min: int = 30,
-                      anchor_interval_min: int = 120) -> DataFrame:
+def sample_trajectory(
+    df_input: DataFrame,
+    fast_sog_threshold_knots: float = 10.0,
+    fast_interval_min: int = 10,
+    slow_interval_min: int = 15
+) -> DataFrame:
     """
-    Sample points by:
-      - keeping all day/voyage endpoints
-      - keeping moving points sampled per bucket (fast vs slow cadence)
-      - keeping anchored points sparsely (default first/last per 120m bucket)
-    Then recompute segment distances on the sampled set.
-    """
-    df = df_input
+    Purpose
+    -------
+    Downsample trajectory points while preserving path fidelity for moving segments
+    and ensuring daily anchor checkpoints.
 
-    df = (
-        df
-        .withColumn(
-            "bucket_move",
-            F.floor(
-                F.unix_timestamp("BaseDateTime") /
-                F.when(F.coalesce(F.col("SOG"), F.lit(0.0)) >= fast_sog_threshold_knots,
-                       fast_interval_min * 60)
-                 .otherwise(slow_interval_min * 60)
+    Algorithm
+    --------------------
+    1. Compute a time-bucket per row (bucket_move) where bucket size is:
+         - fast_interval_min when SOG >= fast_sog_threshold_knots
+         - slow_interval_min otherwise
+       (uses floor(unix_timestamp / bucket_seconds) to quantize time).
+    2. Compute per-day partition columns (year, month, day) for day-level endpoints.
+    3. Define windows:
+         - w_move_first: partition (MMSI, VoyageID, bucket_move) ordered asc
+         - w_move_last : partition (MMSI, VoyageID, bucket_move) ordered desc
+         - w_day_first : partition (MMSI, year, month, day) ordered asc
+         - w_day_last  : partition (MMSI, year, month, day) ordered desc
+    4. Mark keep flags:
+         - For moving rows (movement_state != "anchored"), keep first and last of each bucket.
+         - For anchored rows, implicitly rely on day-first/day-last to keep daily endpoints.
+    5. Filter to rows where any keep flag == 1 (first/last per bucket or day).
+    6. Drop helper columns and recompute segment distances on the sampled timeline.
+    7. Return sampled DataFrame with recomputed SegmentDistanceKM.
+
+    Complexity & Rationale
+    ----------------------
+    - Preserves short bursts: keeping both first+last per moving bucket retains brief movements
+      within the bucket while preventing full-resolution retention for long idle periods.
+    - Anchored sampling reduces cardinality but keeps daily checkpoints (first+last).
+    - Recomputing SegmentDistanceKM on the sampled set preserves correct aggregated distance
+      behavior for downstream voyage summarization.
+
+    Notes
+    -----
+    - This function expects movement_state, LAT, LON, BaseDateTime, MMSI, VoyageID columns.
+    - calculate_haversine must be available in scope.
+    """
+    try:
+        df = (
+            df_input
+            .withColumn(
+                "bucket_move",
+                F.floor(
+                    F.unix_timestamp("BaseDateTime") /
+                    F.when(
+                        F.coalesce(F.col("SOG"), F.lit(0.0)) >= fast_sog_threshold_knots,
+                        fast_interval_min * 60
+                    ).otherwise(slow_interval_min * 60)
+                )
             )
+            .withColumn("year",  F.year("BaseDateTime"))
+            .withColumn("month", F.month("BaseDateTime"))
+            .withColumn("day",   F.dayofmonth("BaseDateTime"))
         )
-        .withColumn("bucket_anchor", F.floor(F.unix_timestamp("BaseDateTime") / (anchor_interval_min * 60)))
-        .withColumn("year", F.year("BaseDateTime"))
-        .withColumn("month", F.month("BaseDateTime"))
-        .withColumn("day", F.dayofmonth("BaseDateTime"))
-    )
 
-    w_move = Window.partitionBy("MMSI", "VoyageID", "bucket_move").orderBy("BaseDateTime")
-    w_anchor_asc = Window.partitionBy("MMSI", "VoyageID", "bucket_anchor").orderBy("BaseDateTime")
-    w_anchor_desc = Window.partitionBy("MMSI", "VoyageID", "bucket_anchor").orderBy(F.col("BaseDateTime").desc())
-    w_day_first = Window.partitionBy("MMSI", "year", "month", "day").orderBy("BaseDateTime")
-    w_day_last = Window.partitionBy("MMSI", "year", "month", "day").orderBy(F.col("BaseDateTime").desc())
+        # Windows
+        w_move_first = Window.partitionBy("MMSI", "VoyageID", "bucket_move").orderBy("BaseDateTime")
+        w_move_last  = Window.partitionBy("MMSI", "VoyageID", "bucket_move").orderBy(F.col("BaseDateTime").desc())
+        w_day_first  = Window.partitionBy("MMSI", "year", "month", "day").orderBy("BaseDateTime")
+        w_day_last   = Window.partitionBy("MMSI", "year", "month", "day").orderBy(F.col("BaseDateTime").desc())
+        w_anchor_first = Window.partitionBy("MMSI","year","month","day").orderBy("BaseDateTime")
+        w_anchor_last  = Window.partitionBy("MMSI","year","month","day").orderBy(F.col("BaseDateTime").desc())
 
-    df = (
-        df
-        .withColumn("keep_move", F.when(F.col("movement_state") != "anchored", F.row_number().over(w_move)).otherwise(F.lit(None)))
-        .withColumn("keep_anchor_first", F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_asc)).otherwise(F.lit(None)))
-        .withColumn("keep_anchor_last", F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_desc)).otherwise(F.lit(None)))
-        .withColumn("keep_day_first", F.row_number().over(w_day_first))
-        .withColumn("keep_day_last", F.row_number().over(w_day_last))
-    )
+        # Keep rules
+        df = (
+            df
+            .withColumn("keep_move_first", F.when(F.col("movement_state") != "anchored", F.row_number().over(w_move_first)))
+            .withColumn("keep_move_last",  F.when(F.col("movement_state") != "anchored", F.row_number().over(w_move_last)))
+            .withColumn("keep_day_first",  F.row_number().over(w_day_first))
+            .withColumn("keep_day_last",   F.row_number().over(w_day_last))
+            .withColumn("keep_anchor_first",F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_first)))
+            .withColumn("keep_anchor_last",F.when(F.col("movement_state") == "anchored", F.row_number().over(w_anchor_last)))
+        )
 
-    df = df.filter(
-        (F.col("keep_move") == 1) |
-        (F.col("keep_anchor_first") == 1) |
-        (F.col("keep_anchor_last") == 1) |
-        (F.col("keep_day_first") == 1) |
-        (F.col("keep_day_last") == 1)
-    )
+        # Apply sample filter
+        df = df.filter(
+            (F.col("keep_move_first")   == 1) |
+            (F.col("keep_move_last")    == 1) |
+            (F.col("keep_anchor_first") == 1) |
+            (F.col("keep_anchor_last")  == 1) |
+            (F.col("keep_day_first")    == 1) |
+            (F.col("keep_day_last")     == 1)
+        )
 
-    df = df.drop("bucket_move", "bucket_anchor", "keep_move", "keep_anchor_first", "keep_anchor_last", "keep_day_first", "keep_day_last")
+        # Cleanup helper cols
+        df = df.drop("bucket_move", "keep_move_first", "keep_move_last", "keep_day_first", "keep_day_last","keep_anchor_first","keep_anchor_last")
 
-    # Recompute distances on sampled set
-    w_prev = Window.partitionBy("MMSI", "VoyageID").orderBy("BaseDateTime")
-    df = df.withColumn("PrevLAT_thin", F.lag("LAT").over(w_prev))
-    df = df.withColumn("PrevLON_thin", F.lag("LON").over(w_prev))
-    df = df.withColumn(
-        "SegmentDistanceKM",
-        calculate_haversine("PrevLAT_thin", "PrevLON_thin", "LAT", "LON"),
-    )
-    df = df.drop("PrevLAT_thin", "PrevLON_thin")
+        # Recompute distances on sampled set
+        w_prev = Window.partitionBy("MMSI", "VoyageID").orderBy("BaseDateTime")
+        df = df.withColumn("PrevLAT_thin", F.lag("LAT").over(w_prev))
+        df = df.withColumn("PrevLON_thin", F.lag("LON").over(w_prev))
+        df = df.withColumn(
+            "SegmentDistanceKM",
+            calculate_haversine("PrevLAT_thin", "PrevLON_thin", "LAT", "LON")
+        )
+        df = df.drop("PrevLAT_thin", "PrevLON_thin")
 
-    return df
+        return df
+
+    except Exception as e:
+        raise RuntimeError(f"sample_trajectory failed: {e}")
 
 # -----------------------------------------------------------------------------
 # Main job
