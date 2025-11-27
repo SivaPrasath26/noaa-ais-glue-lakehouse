@@ -34,7 +34,7 @@ End-to-end data engineering workflow for high-volume geospatial AIS. The pipelin
 * Processes > 450 GB (2024 + 2025) of AIS data with distributed PySpark jobs on Glue.
 * Modular three-stage pipeline: **Raw -> Staging -> Curated** with stateful incremental/recompute to avoid double-counting.
 * Cleansing: column normalization, schema enforcement, empty-to-null, coordinate validation with quarantine, SOG/COG/Heading clamping, hash-based deduplication, movement flagging.
-  * Curated facts: voyage segmentation (3h gap rule), haversine segment distance, geohash indexing, spatial grid options, voyage summaries; trajectory fact is sampled (endpoints kept, SOG-based fast/slow cadence, sparse anchors) and partitioned by `year/month/day/mmsi` with window-scoped overwrite.
+  * Curated facts: voyage segmentation (3h gap rule), haversine segment distance, geohash indexing, spatial grid options, voyage summaries; trajectory fact is sampled (endpoints kept, SOG-based fast/slow cadence, sparse anchors) and partitioned by `year/month/day` with window-scoped overwrite.
 * Dimensions: country (MID + call sign), navigational status, vessel type from S3 lookups.
 * Testing: PySpark unit and integration coverage for transformations and schemas.
 * Built for downstream analytics, BI, and backend/API integration.
