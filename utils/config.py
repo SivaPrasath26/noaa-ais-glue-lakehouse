@@ -34,9 +34,9 @@ DEFAULT_GLUE_TEMP_DIR = _env("GLUE_TEMP_DIR", "s3://noaa-ais-temp/glue-temp/")
 DEFAULT_GLUE_ROLE_NAME = _env("GLUE_ROLE_NAME", "AWSGlueServiceRole-Project")
 
 DEFAULT_S3_RAW = _env("S3_RAW_PATH", "s3://noaa-ais-raw-data/")
-DEFAULT_S3_STAGING = _env("S3_STAGING_PATH", "s3://noaa-ais-staging-data/")
-DEFAULT_S3_LOOKUP = _env("S3_LOOKUP_PATH", "s3://noaa-ais-lookup-data/")
-DEFAULT_S3_CURATED = _env("S3_CURATED_PATH", "s3://noaa-ais-curated-data/")
+DEFAULT_S3_STAGING = _env("S3_STAGING_PATH", "s3://ais-staging-data/")
+DEFAULT_S3_LOOKUP = _env("S3_LOOKUP_PATH", "s3://ais-lookup-data/")
+DEFAULT_S3_CURATED = _env("S3_CURATED_PATH", "s3://ais-curated-data/")
 
 # Toggles
 LOG_COUNTS_DEFAULT = _env("LOG_COUNTS", "0")
