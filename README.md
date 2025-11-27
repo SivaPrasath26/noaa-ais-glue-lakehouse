@@ -12,73 +12,19 @@ End-to-end data engineering workflow for high-volume geospatial AIS. The pipelin
 
 ## **Architecture**
 
-```mermaid
-graph TD
-    A["NOAA AIS Raw CSVs"] --> B["S3 Raw Layer"]
+![alt text](./assets/images/pipelines/architecture.png)
 
-    B --> C["Raw to Staging
-    PySpark Glue"]
-
-    C --> D["S3 Staging Parquet
-    y/m/d"]
-
-    D --> E["State Snapshots
-    by_date"]
-    D --> F["Staging to Curated
-    Trajectory Fact"]
-
-    F --> G["Voyage State Update"]
-    F --> H["trajectory_points (curated)"]
-
-    H --> I["voyage_summary (curated)"]
-
-    I --> J["Athena / Quicksight / FastAPI"]
-
-    J --> K["Schema Management
-    Athena DDL / Glue Catalog"]
-
-```
 ---
 
 ### **Raw -> Staging Flow**
 
-```mermaid
-flowchart TD
-    A["NOAA AIS CSV"] --> B["Normalize Columns via Mapping"]
-    B --> C["Enforce Raw Schema
-+
- Cast Types"]
-    C --> D["Clean:
-Empty to Null, Parse BaseDateTime"]
-    D --> E["Validate Coordinates
- +
- Quarantine Bad Records"]
-    E --> F["Clamp SOG/COG/Heading"]
-    F --> G["Hash-Based Deduplication"]
-    G --> H["Derive Movement Flag"]
-    H --> I["Partition Columns year/month/day"]
-    I --> J["Write Staging Parquet
- y-m-d"]
-```
+![alt text](./assets/images/pipelines/raw_to_staging.png)
+
 ---
 
 ### **Staging -> Curated Incremental Flow**
 
-```mermaid
-flowchart TD
-    A["Staging Data - Daily Partitions"] --> B["Load Prior-Day State (by_date)"]
-    A --> C["Load Window Data"]
-    B --> D["Append With Prior State"]
-    C --> D
-    D --> E["Sort Per MMSI By Timestamp"]
-    E --> F["Trajectory Reconstruction + Sampling"]
-    F --> G["Write FACT 1 (date/mmsi, window-scoped replace)"]
-    F --> H["State Snapshot (by_date=end_date)"]
-    G --> I["Voyage Level Aggregation (FACT 2)"]
-    I --> J["Write FACT 2 (coalesced)"]
-    H --> K["Ready For Next Incremental Cycle"]
-    J --> K
-```
+![alt text](./assets/images/pipelines/staging_to_curated.png)
 
 ---
 
