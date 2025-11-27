@@ -1,4 +1,5 @@
 # **NOAA AIS Data Pipeline**
+![My Skills](https://go-skill-icons.vercel.app/api/icons?i=aws,spark,s3,glue,athena&perline=5)
 
 PySpark and AWS Glue pipeline processing **~4.5 billion rows (~455 GB)** of AIS vessel tracking data from NOAA. Ingests daily and backfill drops from U.S. waters and delivers analytics-ready Parquet in Amazon S3, optimized for **downstream analytics** and **API integration** without double-counting across incremental runs.
 
