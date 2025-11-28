@@ -1,13 +1,28 @@
 # **NOAA AIS Data Pipeline**
 ![My Skills](https://go-skill-icons.vercel.app/api/icons?i=aws,spark,s3,glue,athena&perline=5)
 
-PySpark and AWS Glue pipeline processing **~4.5 billion rows (~455 GB)** of AIS vessel tracking data from NOAA. Ingests daily and backfill drops from U.S. waters and delivers analytics-ready Parquet in Amazon S3, optimized for **downstream analytics** and **API integration** without double-counting across incremental runs.
+## PySpark and AWS Glue AIS Data Pipeline
 
----
+PySpark and AWS Glue pipeline processing ~4.5 billion AIS vessel-tracking records (~455 GB) from NOAA, engineered for **high-volume geospatial ingestion** and **distributed lakehouse transformation**.
 
-## **Overview**
+- Supports both daily ingest and multi-year backfills
+- Unifies fragmented raw AIS drops into a consistent staging schema
+- Enforces **strict data-quality controls**
+  - type normalization
+  - coordinate validation
+  - quarantine isolation
+- Performs deterministic **SHA256 content-hash deduplication**
+- Eliminates double-counting across incremental windows
+- Avoids reprocessing drift
+- Provides stable long-horizon processing guarantees for national-scale archives
 
-End-to-end data engineering workflow for high-volume geospatial AIS. The pipeline standardizes schema, cleans and quarantines bad records, deduplicates via content hashing, enriches with voyage segmentation and spatial features, and serves curated datasets for Athena, BI, and API consumers. Built for Glue 5.0 (Spark 3.5) with modular utilities and unit-tested transforms.
+The curated layer applies **voyage segmentation**, seeded time-gap propagation, **haversine distance computation**, **movement classification**, **geohash-based spatial indexing**, and trajectory sampling algorithm to deliver **analytics-ready Parquet** optimized for Athena, interactive dashboards, and API delivery.
+
+- Compresses billions of AIS points into compact high-fidelity vessel trajectories
+- Preserves navigational continuity and voyage-level correctness
+- Follows a modular design philosophy
+- Fully Glue-5.0 compliant (Spark 3.5)
+- Structured as a maintainable **geospatial lakehouse pipeline** capable of sustained, national-scale batch throughput
 
 ---
 
