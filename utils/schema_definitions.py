@@ -11,6 +11,7 @@ from pyspark.sql.types import (
     DoubleType,
     TimestampType,
     LongType,
+    BooleanType,
 )
 
 # ----------------------------------------------------------
@@ -85,3 +86,23 @@ STATE_SNAPSHOT_SCHEMA = StructType([
 ])
 
 SCHEMA_MAP["state_snapshot"] = STATE_SNAPSHOT_SCHEMA
+
+
+# ----------------------------------------------------------
+# VOYAGE STATE SCHEMA - running aggregates per voyage
+# ----------------------------------------------------------
+VOYAGE_STATE_SCHEMA = StructType([
+    StructField("mmsi", IntegerType(), False),
+    StructField("voyageid", LongType(), False),
+    StructField("voyagestart", TimestampType(), True),
+    StructField("lasttime", TimestampType(), True),
+    StructField("totaldistancekm", DoubleType(), True),
+    StructField("sumsog", DoubleType(), True),
+    StructField("countsog", LongType(), True),
+    StructField("sumlat", DoubleType(), True),
+    StructField("sumlon", DoubleType(), True),
+    StructField("pointcount", LongType(), True),
+    StructField("is_complete", BooleanType(), True),
+])
+
+SCHEMA_MAP["voyage_state"] = VOYAGE_STATE_SCHEMA

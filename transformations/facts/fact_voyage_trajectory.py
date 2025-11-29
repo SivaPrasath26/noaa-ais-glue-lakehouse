@@ -229,9 +229,12 @@ def sample_trajectory(
                     ).otherwise(slow_interval_min * 60)
                 )
             )
-            .withColumn("year",  F.year("BaseDateTime"))
-            .withColumn("month", F.month("BaseDateTime"))
-            .withColumn("day",   F.dayofmonth("BaseDateTime"))
+            .withColumn("year_int",  F.year("BaseDateTime"))
+            .withColumn("month_int", F.month("BaseDateTime"))
+            .withColumn("day_int",   F.dayofmonth("BaseDateTime"))
+            .withColumn("year",  F.date_format("BaseDateTime", "yyyy"))
+            .withColumn("month", F.date_format("BaseDateTime", "MM"))
+            .withColumn("day",   F.date_format("BaseDateTime", "dd"))
         )
 
         # Windows
@@ -337,7 +340,7 @@ def run_trajectory_job(input_path: str,
             dates.append(d_iter)
             d_iter += one_day
         date_filter_expr = " OR ".join(
-            [f"year={d.year} AND month={d.month} AND day={d.day}" for d in dates]
+            [f"year='{d.strftime('%Y')}' AND month='{d.strftime('%m')}' AND day='{d.strftime('%d')}'" for d in dates]
         )
 
         writer_partitions = max(200, len(df_thin.columns))

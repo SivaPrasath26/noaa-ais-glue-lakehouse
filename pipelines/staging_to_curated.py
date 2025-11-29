@@ -11,7 +11,7 @@ import time
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
-from datetime import datetime
+from datetime import datetime, timedelta
 from pyspark.context import SparkContext
 from pyspark.sql import functions as F
 
@@ -59,9 +59,15 @@ def parse_args():
     """
     Resolve Glue job args.
     Required: JOB_NAME, mode (incremental|recompute), start_date, end_date.
-    Optional: LOG_COUNTS (0|1) to control row count logging.
+    Optional: LOG_COUNTS (0|1) to control row count logging;
+              run_fact1 (0|1) and run_fact2 (0|1) to optionally skip a fact.
     """
-    return getResolvedOptions(sys.argv, ["JOB_NAME", "mode", "start_date", "end_date", "LOG_COUNTS"])
+    base = ["JOB_NAME", "mode", "start_date", "end_date", "LOG_COUNTS"]
+    optional = []
+    for opt in ["run_fact1", "run_fact2"]:
+        if f"--{opt}" in sys.argv:
+            optional.append(opt)
+    return getResolvedOptions(sys.argv, base + optional)
 
 
 # =========================================================
@@ -70,6 +76,8 @@ def parse_args():
 # =========================================================
 def write_checkpoint(df, label: str):
     """Lightweight checkpoint for row/mmsi counts."""
+    if os.environ.get("LOG_COUNTS", "0") != "1":
+        return
     try:
         cnt = df.count()
         distinct_mmsi = 0
@@ -95,10 +103,12 @@ def run_orchestrator():
     border = "-" * 72
 
     args = parse_args()
+    run_fact1 = str(args.get("run_fact1", "1")).lower() in ("1", "true", "yes")
+    run_fact2 = str(args.get("run_fact2", "1")).lower() in ("1", "true", "yes")
     # Propagate LOG_COUNTS into env so log_df_stats can pick it up
     if "LOG_COUNTS" in args:
         os.environ["LOG_COUNTS"] = str(args["LOG_COUNTS"])
-    logger.info(f"LOG_COUNTS={os.environ.get('LOG_COUNTS', '0')}")
+    logger.info(f"LOG_COUNTS={os.environ.get('LOG_COUNTS', '0')} run_fact1={run_fact1} run_fact2={run_fact2}")
     job = Job(glue_ctx)
     try:
         job.init(args["JOB_NAME"], args)
@@ -111,31 +121,61 @@ def run_orchestrator():
         voy_out = CFG.S3_CURATED + "voyage_summary/"
         state_latest = CFG.STATE_LATEST_PATH
         state_by_date = CFG.STATE_BY_DATE_PATH
+        state_voyage_by_date = CFG.VOYAGE_STATE_BY_DATE_PATH
 
-        logger.info(border)
-        t0 = time.perf_counter()
-        logger.info("Fact 1 (trajectory_points) started")
-        run_trajectory_job(
-            input_path=staging_path,
-            output_path=traj_out,
-            state_latest_path=state_latest,
-            state_by_date_prefix=state_by_date,
-            start_date=args["start_date"],
-            end_date=args["end_date"],
-            mode=args["mode"],
-        )
-        logger.info(f"Fact 1 (trajectory_points) completed in {time.perf_counter() - t0:.1f}s")
-        logger.info(border)
+        if run_fact1:
+            logger.info(border)
+            t0 = time.perf_counter()
+            logger.info("Fact 1 (trajectory_points) started")
+            run_trajectory_job(
+                input_path=staging_path,
+                output_path=traj_out,
+                state_latest_path=state_latest,
+                state_by_date_prefix=state_by_date,
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+                mode=args["mode"],
+            )
+            logger.info(f"Fact 1 (trajectory_points) completed in {time.perf_counter() - t0:.1f}s")
+            logger.info(border)
+        else:
+            logger.info(border)
+            logger.warning("Fact 1 (trajectory_points) skipped (run_fact1=0) - ensure trajectory data for this window is already correct.")
+            logger.info(border)
 
-        # Load Fact 1 output for Fact 2 aggregation
-        df_traj = spark.read.parquet(traj_out)
-        write_checkpoint(df_traj, "trajectory_points_loaded")
+        # Load windowed Fact 1 output for Fact 2 aggregation (partition-pruned)
+        if run_fact2:
+            try:
+                date_paths = []
+                start_dt = datetime.fromisoformat(args["start_date"])
+                end_dt = datetime.fromisoformat(args["end_date"])
+                cur = start_dt
+                while cur <= end_dt:
+                    date_paths.append(
+                        f"{traj_out}year={cur.strftime('%Y')}/month={cur.strftime('%m')}/day={cur.strftime('%d')}/"
+                    )
+                    cur = cur + timedelta(days=1)
+                df_traj = spark.read.parquet(*date_paths)
+                write_checkpoint(df_traj, "trajectory_points_loaded")
+            except Exception as e:
+                logger.warning(f"trajectory_points checkpoint skipped: {e}")
 
-        t1 = time.perf_counter()
-        logger.info("Fact 2 (voyage_summary) started")
-        summarize_voyages(df_traj, voy_out)
-        logger.info(f"Fact 2 (voyage_summary) completed in {time.perf_counter() - t1:.1f}s")
-        logger.info(border)
+            t1 = time.perf_counter()
+            logger.info("Fact 2 (voyage_summary) started")
+            summarize_voyages(
+                spark,
+                traj_out,
+                voy_out,
+                state_voyage_by_date,
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+            )
+            logger.info(f"Fact 2 (voyage_summary) completed in {time.perf_counter() - t1:.1f}s")
+            logger.info(border)
+        else:
+            logger.info(border)
+            logger.warning("Fact 2 (voyage_summary) skipped (run_fact2=0) - voyage summary/state not updated.")
+            logger.info(border)
 
         logger.info("Curated Orchestrator finished successfully.")
     except Exception as e:
