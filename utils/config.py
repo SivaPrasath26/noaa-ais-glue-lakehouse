@@ -110,7 +110,7 @@ class AISConfig:
     # State snapshot locations
     @property
     def STATE_BASE_PATH(self) -> str:
-        return self.S3_CURATED + "state/"
+        return self.S3_CURATED + "trajectory_state/"
 
     @property
     def STATE_LATEST_PATH(self) -> str:
@@ -120,6 +120,11 @@ class AISConfig:
     def STATE_BY_DATE_PATH(self) -> str:
         """Prefix for dated state snapshots. Append formatted date (YYYY-MM-DD)."""
         return self.STATE_BASE_PATH + "by_date="
+    
+    @property
+    def VOYAGE_STATE_BY_DATE_PATH(self) -> str:
+        """Voyage state snapshots by date (append YYYY-MM-DD/)."""
+        return self.S3_CURATED + "voyage_state/by_date="
 
     # ------------------------------------------------------------------
     # Runtime parameters and backward-compatible aliases
