@@ -88,21 +88,27 @@ STATE_SNAPSHOT_SCHEMA = StructType([
 SCHEMA_MAP["state_snapshot"] = STATE_SNAPSHOT_SCHEMA
 
 
-# ----------------------------------------------------------
-# VOYAGE STATE SCHEMA - running aggregates per voyage
-# ----------------------------------------------------------
-VOYAGE_STATE_SCHEMA = StructType([
+VOYAGE_SEGMENTS_SCHEMA = StructType([
     StructField("mmsi", IntegerType(), False),
     StructField("voyageid", LongType(), False),
-    StructField("voyagestart", TimestampType(), True),
-    StructField("lasttime", TimestampType(), True),
-    StructField("totaldistancekm", DoubleType(), True),
-    StructField("sumsog", DoubleType(), True),
-    StructField("countsog", LongType(), True),
-    StructField("sumlat", DoubleType(), True),
-    StructField("sumlon", DoubleType(), True),
-    StructField("pointcount", LongType(), True),
-    StructField("is_complete", BooleanType(), True),
+    StructField("day", StringType(), False),  # YYYY-MM-DD
+    StructField("day_first_time", TimestampType(), True),
+    StructField("day_last_time", TimestampType(), True),
 ])
 
-SCHEMA_MAP["voyage_state"] = VOYAGE_STATE_SCHEMA
+VOYAGE_SUMMARY_STAGING_SCHEMA = StructType([
+    StructField("mmsi", IntegerType(), False),
+    StructField("voyageid", LongType(), False),
+    StructField("day", StringType(), False),  # YYYY-MM-DD
+
+    StructField("day_distance_km", DoubleType(), True),
+    StructField("day_sum_sog", DoubleType(), True),
+    StructField("day_pointcount", LongType(), True),
+
+    StructField("day_sum_lat", DoubleType(), True),
+    StructField("day_sum_lon", DoubleType(), True),
+])
+
+SCHEMA_MAP["voyage_segments"] = VOYAGE_SEGMENTS_SCHEMA
+SCHEMA_MAP["voyage_summary_staging"] = VOYAGE_SUMMARY_STAGING_SCHEMA
+

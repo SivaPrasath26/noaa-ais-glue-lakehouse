@@ -122,9 +122,16 @@ class AISConfig:
         return self.STATE_BASE_PATH + "by_date="
     
     @property
-    def VOYAGE_STATE_BY_DATE_PATH(self) -> str:
-        """Voyage state snapshots by date (append YYYY-MM-DD/)."""
-        return self.S3_CURATED + "voyage_state/by_date="
+    def VOYAGE_SEGMENTS_PATH(self) -> str:
+        return self.S3_CURATED + "voyage_segments/"
+
+    @property
+    def VOYAGE_SUMMARY_STAGING_PATH(self) -> str:
+        return self.S3_CURATED + "voyage_summary_staging/"
+
+    @property
+    def VOYAGE_SUMMARY_PATH(self) -> str:
+        return self.S3_CURATED + "voyage_summary/"
 
     # ------------------------------------------------------------------
     # Runtime parameters and backward-compatible aliases

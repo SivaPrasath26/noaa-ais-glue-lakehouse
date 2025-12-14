@@ -17,8 +17,7 @@ from pyspark.sql import functions as F
 
 from utils.config import CFG, setup_logger
 from transformations.facts.fact_voyage_trajectory import run_trajectory_job
-from transformations.facts.fact_voyage_summary import summarize_voyages
-
+from transformations.facts.fact_voyage_daily import run_daily_voyage_jobs
 
 # ----------------------------
 # Spark / Glue initialization
@@ -121,7 +120,7 @@ def run_orchestrator():
         voy_out = CFG.S3_CURATED + "voyage_summary/"
         state_latest = CFG.STATE_LATEST_PATH
         state_by_date = CFG.STATE_BY_DATE_PATH
-        state_voyage_by_date = CFG.VOYAGE_STATE_BY_DATE_PATH
+        #state_voyage_by_date = CFG.VOYAGE_STATE_BY_DATE_PATH
 
         if run_fact1:
             logger.info(border)
@@ -161,16 +160,18 @@ def run_orchestrator():
                 logger.warning(f"trajectory_points checkpoint skipped: {e}")
 
             t1 = time.perf_counter()
-            logger.info("Fact 2 (voyage_summary) started")
-            summarize_voyages(
-                spark,
-                traj_out,
-                voy_out,
-                state_voyage_by_date,
+            logger.info("Fact 2 (voyage_daily) started")
+
+            run_daily_voyage_jobs(
+                spark=spark,
+                traj_path=traj_out,
+                segment_path=CFG.S3_CURATED + "voyage_segments/",
+                staging_path=CFG.S3_CURATED + "voyage_summary_staging/",
                 start_date=args["start_date"],
-                end_date=args["end_date"],
+                end_date=args["end_date"]
             )
-            logger.info(f"Fact 2 (voyage_summary) completed in {time.perf_counter() - t1:.1f}s")
+
+            logger.info(f"Fact 2 (voyage_daily) completed in {time.perf_counter() - t1:.1f}s")
             logger.info(border)
         else:
             logger.info(border)
